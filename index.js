@@ -1,8 +1,11 @@
 var bitcoin = require('bitcoinjs-lib');
 var crypto = require('crypto');
 var request = require('request');
+var qr = require('qr-encode');
+var bigi = require('bigi');
 
 var coluHost = 'https://secure.colu.co';
+
 
 module.exports = Colu;
 
@@ -35,6 +38,7 @@ Colu.prototype.register = function(callback) {
           if (err) {
               return callback(err);
           }
+          body = JSON.parse(body);
           return callback(null, body);
         }
       );
@@ -42,20 +46,84 @@ Colu.prototype.register = function(callback) {
   );
 }
 
+Colu.prototype.getWIF = function(network) {
+  if (network && network.toLowerCase() === 'testnet') {
+    network = bitcoin.networks.testnet;
+  }
+  else {
+    network = bitcoin.networks.bitcoin;
+  }
+  return this.privateKey.toWIF(network);
+}
+
 Colu.prototype.createRegistrationMessage = function(username) {
-  
+  var rand = crypto.randomBytes(10);
+  var rand = rand.toString('hex');
+  var utcTS = Date.now();
+  var message = username + ',' + utcTS + ',' + rand;
+  var signature = ecdsaSign(message, this.privateKey);
+  var jsonSignature = JSON.stringify(signature);
+  var publicKey = this.privateKey.pub.toHex();
+  var registrationMessage = { 
+    message : message, 
+    company_pub_key : publicKey, 
+    company_public_key : publicKey,
+    signature : jsonSignature,
+    company_name: this.companyName
+  };
+  return registrationMessage;
 }
 
 Colu.prototype.createRegistrationQR = function(registrationMessage) {
-  
+  var dataURI = qr(JSON.stringify(registrationMessage), {type: 12, size: 10, level: 'L'});
+  return dataURI;
 }
 
 Colu.prototype.registerUser = function(registrationMessage, callback) {
-  
+  request.post(coluHost + "/start_user_registration_to_company",
+    {form: registrationMessage },
+    function (err, response, body) {
+      if (err) {
+          return callback(err);
+      }
+      body = JSON.parse(body);
+      if (verifyMessage(registrationMessage, body.verified_client_signature, body.client_public_key)) {
+        return callback(null, body);
+      }
+      else {
+        callback('signature not verified');
+      }
+    }
+  );
 }
 
-Colu.prototype.verifyUser = function(username, callback) {
-  
+Colu.prototype.verifyUser = function(username, clientPublickey, callback) {
+  var data_params = this.createRegistrationMessage(username);
+  data_params.user_public_key = clientPublickey;
+  data_params.token_details = 'token';
+  request.post(coluHost + "/check_token_address",
+    {form: data_params },
+    function (err, response, body) {
+      if (err) {
+          return callback(err);
+      }
+      body = JSON.parse(body);
+      if (verifyMessage(data_params, body.verified_client_signature, clientPublickey)) {
+        return callback(null, body);
+      }
+      else {
+        callback('signature not verified');
+      }
+    }
+  );
+}
+
+function verifyMessage(registrationMessage, clientSignature, clientPublicKey) {
+  var message = registrationMessage.message;
+  var signature = registrationMessage.signature;
+  var clientMessage = message+';'+signature;
+  var hash = crypto.createHash('sha256').update(clientMessage).digest();
+  return ecdsa_verify(hash, clientSignature, bitcoin.ECPubKey.fromHex(clientPublicKey));
 }
 
 function generateCc() {
@@ -91,4 +159,23 @@ function concatBuffers(buf1, buf2) {
   buf1.copy(buf);
   buf2.copy(buf, buf1.length);
   return buf;
+}
+
+function ecdsaSign(message, privateKey) {
+  var shaMsg = crypto.createHash('sha256').update(message).digest();
+  var signature = privateKey.sign(shaMsg);
+  var signatureHex = {}
+  signatureHex.s = signature.s.toString(16);
+  signatureHex.r = signature.r.toString(16);
+  if (signatureHex.s.length % 2 != 0) signatureHex.s = '0' + signatureHex.s;
+  if (signatureHex.r.length % 2 != 0) signatureHex.r = '0' + signatureHex.r;
+  return signatureHex;
+}
+
+function ecdsa_verify(hash, signature, publicKey) {
+  var json_signature = JSON.parse(signature);
+  var sig_obj = {};
+  sig_obj.s = bigi.fromHex(json_signature.s);
+  sig_obj.r = bigi.fromHex(json_signature.r);
+  return isValid = publicKey.verify(hash, sig_obj);
 }
