@@ -1,0 +1,37 @@
+{
+  "name": "colu-node",
+  "version": "0.0.0",
+  "description": "Colu SDK for node.js developers",
+  "main": "index.js",
+  "dependencies": {
+    "bigi": "^1.4.0",
+    "crypto": "^0.0.3",
+    "bitcoinjs-lib": "^1.4.3",
+    "qr-encode": "^0.3.0",
+    "request": "^2.51.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Colu-platform/colu-node.git"
+  },
+  "keywords": [
+    "Colu",
+    "node",
+    "js",
+    "nodejs",
+    "colored",
+    "coins",
+    "coloredcoins",
+    "2fa"
+  ],
+  "author": "Tal Beja",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Colu-platform/colu-node/issues"
+  },
+  "homepage": "https://github.com/Colu-platform/colu-node"
+}
