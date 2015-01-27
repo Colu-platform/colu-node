@@ -55,25 +55,25 @@ var colu = new Colu('my_company', privateKey, cc, i)
 ## Register a user to 2FA:
 You can register a user to the Colu 2FA service on your our site with 3 simple steps:  
 1. Create a registration message:
-```js
-var username = 'tal'
-var registrationMessage = colu.createRegistrationMessage(username)
-```
+  ```js
+  var username = 'tal'
+  var registrationMessage = colu.createRegistrationMessage(username)
+  ```  
 2. Create a registration QR code:
-```js
-var qr = colu.createRegistrationQR(registrationMessage);
-```
+  ```js
+  var qr = colu.createRegistrationQR(registrationMessage);
+  ```  
 3. Show to the user the QR code in your site to scan with our mobile application, and prompt our server:
-```js
-colu.registerUser(registrationMessage, function(err, data) {
-  if (err) {
-    console.error('error: '+err)
-  }
-  else {
-    console.log('data: '+JSON.stringify(data))
-  }
-})
-```
+ ```js
+  colu.registerUser(registrationMessage, function(err, data) {
+    if (err) {
+      console.error('error: '+err)
+    }
+    else {
+      console.log('data: '+JSON.stringify(data))
+    }
+  })
+  ```
 You should get back the ```clientPublicKey``` you should save it in order to verify this user in the future.
 
 ## Verify user:
@@ -82,7 +82,7 @@ To verify a user all you need to do is:
 var clientPublicKey = '036e747f286883594d8bcc21048e75fa7c16ff135e304b653416e8c74b073c2ee1'
 var username = 'tal'
 
-colu.verifyUser('tal', clientPublicKey, function(err, data) {
+colu.verifyUser(username, clientPublicKey, function(err, data) {
   if (err) {
     console.error('error: '+err)
   }
