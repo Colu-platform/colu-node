@@ -54,16 +54,16 @@ var colu = new Colu('my_company', privateKey, cc, i)
 
 ## Register a user to 2FA:
 You can register a user to the Colu 2FA service on your our site with 3 simple steps:  
-1. Create a registration message:
+1. Create a registration message:  
   ```js
   var username = 'tal'
   var registrationMessage = colu.createRegistrationMessage(username)
   ```  
-2. Create a registration QR code:
+2. Create a registration QR code:  
   ```js
   var qr = colu.createRegistrationQR(registrationMessage);
   ```  
-3. Show to the user the QR code in your site to scan with our mobile application, and prompt our server:
+3. Show to the user the QR code in your site to scan with our mobile application, and prompt our server:  
  ```js
   colu.registerUser(registrationMessage, function(err, data) {
     if (err) {
