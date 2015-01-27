@@ -7,7 +7,20 @@ var i = '4b8bd38955db0008';
 
 var colu = new Colu('test_company', privateKey, cc, i);
 
+/*
+colu.register(function(err, data) {
+  if (err) {
+    console.error('error: '+err)
+  }
+  else {
+    console.log('data: '+JSON.stringify(data))
+  }
+})
+*/
 
+///////////////////////////////////////////////////////
+
+/*
 var registrationMessage = colu.createRegistrationMessage('tal');
 
 //console.log('registrationMessage '+JSON.stringify(registrationMessage));
@@ -41,9 +54,9 @@ colu.registerUser(registrationMessage, function(err, data) {
   }
 });
 
-
+*/
 ////////////////////
-
+/*
 var clientPublicKey = '036e747f286883594d8bcc21048e75fa7c16ff135e304b653416e8c74b073c2ee1';
 
 colu.verifyUser('tal', clientPublicKey, function(err, data) {
@@ -54,3 +67,4 @@ colu.verifyUser('tal', clientPublicKey, function(err, data) {
     console.log('data '+data);
   }
 });
+*/
