@@ -1,8 +1,8 @@
 {
   "name": "colu-node",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Colu SDK for node.js developers",
-  "main": "index.js",
+  "main": "./src/index.js",
   "dependencies": {
     "bigi": "^1.4.0",
     "crypto": "^0.0.3",
@@ -11,9 +11,6 @@
     "request": "^2.51.0"
   },
   "devDependencies": {},
-  "scripts": {
-    "test": "test.js"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Colu-platform/colu-node.git"
