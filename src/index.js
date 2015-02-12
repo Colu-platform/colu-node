@@ -3,13 +3,13 @@ var crypto = require('crypto')
 var request = require('request')
 var qr = require('qr-encode')
 var bigi = require('bigi')
+var User = require('./user.js')
 
 var coluHost = 'https://secure.colu.co'
 
-
 module.exports = Colu
 
-function Colu(companyName, privateKey, cc, i) {
+function Colu(companyName, network, privateKey, cc, i) {
   this.companyName = companyName
   
   if (!privateKey) {
@@ -21,6 +21,12 @@ function Colu(companyName, privateKey, cc, i) {
 
   this.cc = cc || generateCc()
   this.i = i || generateI()
+  
+  if (network && network.toLowerCase() === 'testnet') {
+    this.network = bitcoin.networks.testnet
+  }  else {
+    this.network = bitcoin.networks.bitcoin
+  }
 }
 
 Colu.prototype.register = function(callback) {
@@ -46,14 +52,9 @@ Colu.prototype.register = function(callback) {
   )
 }
 
-Colu.prototype.getWIF = function(network) {
-  if (network && network.toLowerCase() === 'testnet') {
-    network = bitcoin.networks.testnet
-  }
-  else {
-    network = bitcoin.networks.bitcoin
-  }
-  return this.privateKey.toWIF(network)
+Colu.prototype.getWIF = function() {
+  
+  return this.privateKey.toWIF(this.network)
 }
 
 Colu.prototype.createRegistrationMessage = function(username) {
@@ -87,19 +88,26 @@ Colu.prototype.registerUser = function(registrationMessage, callback) {
           return callback(err)
       }
       body = JSON.parse(body)
-      if (verifyMessage(registrationMessage, body.verified_client_signature, body.client_public_key)) {
-        return callback(null, body)
+      if (this.verifyMessage(registrationMessage, body.verified_client_signature, body.client_public_key)) {
+        var user = this.parseRegistrationBody(body)
+        return callback(null, user.getId())
       }
       else {
         callback('signature not verified')
       }
-    }
+    }.bind(this)
   )
 }
 
-Colu.prototype.verifyUser = function(username, clientPublickey, callback) {
+Colu.prototype.parseRegistrationBody = function(body) {
+  return new User(body.client_public_key, body.client_cc, this.network)
+}
+
+Colu.prototype.verifyUser = function(username, userId, addressIndex, callback) {
+  addressIndex = addressIndex || 0
   var data_params = this.createRegistrationMessage(username)
-  data_params.user_public_key = clientPublickey
+  var user = User.fromId(userId, this.network)
+  data_params.client_address = user.getAddress(addressIndex)
   data_params.token_details = 'token'
   request.post(coluHost + "/check_token_address",
     {form: data_params },
@@ -108,22 +116,28 @@ Colu.prototype.verifyUser = function(username, clientPublickey, callback) {
           return callback(err)
       }
       body = JSON.parse(body)
-      if (verifyMessage(data_params, body.verified_client_signature, clientPublickey)) {
+      if (this.verifyMessage(data_params, body.verified_client_signature, body.client_public_key)) {
         return callback(null, body)
       }
       else {
         callback('signature not verified')
       }
-    }
+    }.bind(this)
   )
 }
 
-function verifyMessage(registrationMessage, clientSignature, clientPublicKey) {
+Colu.prototype.verifyMessage = function(registrationMessage, clientSignature, clientPublicKey) {
   var message = registrationMessage.message
   var signature = registrationMessage.signature
+  var clientAddress = registrationMessage.client_address
   var clientMessage = message+';'+signature
   var hash = crypto.createHash('sha256').update(clientMessage).digest()
-  return ecdsa_verify(hash, clientSignature, bitcoin.ECPubKey.fromHex(clientPublicKey))
+  console.log(clientPublicKey);
+  var publicKey = bitcoin.ECPubKey.fromHex(clientPublicKey)
+  if (clientAddress) {
+    return (publicKey.getAddress(this.network) == clientAddress) && ecdsa_verify(hash, clientSignature, publicKey)
+  }
+  return ecdsa_verify(hash, clientSignature, publicKey)
 }
 
 function generateCc() {
@@ -146,19 +160,12 @@ function createOpReturnTx(txDetails, priv, cc, i) {
   tx.addOutput(txDetails.return_address, txDetails.dust)
   var bcc = new Buffer(cc, 'hex')
   var bi = new Buffer(i, 'hex')
-  var buf = concatBuffers(bcc, bi)
+  var buf = Buffer.concat([bcc, bi])
   tx.addOutput(bitcoin.Script.fromChunks([bitcoin.opcodes.OP_RETURN, buf]), 0)
   tx.sign(0, priv)
   cookedTx = tx.build()
   ans = { txHex: cookedTx.toHex(), lastTxid: txDetails.txid}
   return ans
-}
-
-function concatBuffers(buf1, buf2) {
-  var buf = new Buffer(buf1.length + buf2.length)
-  buf1.copy(buf)
-  buf2.copy(buf, buf1.length)
-  return buf
 }
 
 function ecdsaSign(message, privateKey) {
@@ -173,9 +180,11 @@ function ecdsaSign(message, privateKey) {
 }
 
 function ecdsa_verify(hash, signature, publicKey) {
+
   var json_signature = JSON.parse(signature)
   var sig_obj = {}
   sig_obj.s = bigi.fromHex(json_signature.s)
   sig_obj.r = bigi.fromHex(json_signature.r)
   return isValid = publicKey.verify(hash, sig_obj)
 }
+

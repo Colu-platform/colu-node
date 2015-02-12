@@ -5,7 +5,7 @@ var privateKey = 'cQQy71GeXGeFWnDtypas2roY2qrk3KWjJLCxoFqc2wibXr2wWxie'
 var cc = '931c20ed3a1bcc4a8ff59d17b5fb80839a921e68b722726419078934078778eb'
 var i = '4b8bd38955db0008'
 
-var colu = new Colu('my_company', privateKey, cc, i)
+var colu = new Colu('my_company', 'testnet', privateKey, cc, i)
 
 var username = 'tal'
 var registrationMessage = colu.createRegistrationMessage(username)
@@ -43,7 +43,7 @@ colu.registerUser(registrationMessage, function(err, data) {
     console.error('error: '+err)
   }
   else {
-    console.log('data: '+JSON.stringify(data))
+    console.log('userId: '+data)
   }
 })
 
