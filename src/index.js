@@ -157,7 +157,6 @@ function ecdsaSign(message, privateKey) {
 }
 
 function ecdsa_verify(hash, signature, publicKey) {
-
   var json_signature = JSON.parse(signature)
   var sig_obj = {}
   sig_obj.s = bigi.fromHex(json_signature.s)

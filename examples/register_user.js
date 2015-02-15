@@ -5,7 +5,7 @@ var privateKey = 'cQQy71GeXGeFWnDtypas2roY2qrk3KWjJLCxoFqc2wibXr2wWxie'
 
 var colu = new Colu('my_company', 'testnet', privateKey)
 
-var username = 'tal'
+var username = 'bob'
 var registrationMessage = colu.createRegistrationMessage(username)
 
 var qr = colu.createRegistrationQR(registrationMessage)
