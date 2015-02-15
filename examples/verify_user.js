@@ -6,7 +6,7 @@ var privateKey = 'cQQy71GeXGeFWnDtypas2roY2qrk3KWjJLCxoFqc2wibXr2wWxie'
 var colu = new Colu('my_company', 'testnet', privateKey)
 
 var username = 'tal'
-var userId = 'tpubDCgCu2jpxrR7byQ7t79yXCEa87sQvGJUjuaSxNrXhMCLLUNRYZe6WNgcaSGT3d6vrZ9476S3dCFT3B3KQDSae3pcPzNSFb54xrH18bHXSqC'
+var userId = 'tpubDCgCu2jpxrR7j9JwFQ959wSkNwPQFNQvJJMFnikg1Sb4tkDnBNYaS3Sc1BxKL71hk3jPkQStEY1VE9mTaQjF8kDfEhzxjWid7eVK5F7nWi5'
 
 colu.verifyUser(username, userId, 0, function(err, data) {
   if (err) {

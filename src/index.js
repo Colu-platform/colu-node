@@ -3,6 +3,7 @@ var crypto = require('crypto')
 var request = require('request')
 var qr = require('qr-encode')
 var bigi = require('bigi')
+var assert = require('assert')
 var User = require('./user.js')
 
 var coluHost = 'https://secure.colu.co'
@@ -10,6 +11,7 @@ var coluHost = 'https://secure.colu.co'
 module.exports = Colu
 
 function Colu(companyName, network, privateKey) {
+  assert(companyName, 'Need company name as first argument.')
   this.companyName = companyName
   
   if (!privateKey) {
@@ -32,6 +34,7 @@ Colu.prototype.getWIF = function() {
 }
 
 Colu.prototype.createRegistrationMessage = function(username) {
+  assert(username, 'Need username as first argument.')
   var rand = crypto.randomBytes(10)
   var rand = rand.toString('hex')
   var utcTS = Date.now()
@@ -41,7 +44,6 @@ Colu.prototype.createRegistrationMessage = function(username) {
   var publicKey = this.privateKey.pub.toHex()
   var registrationMessage = { 
     message : message, 
-    company_pub_key : publicKey, 
     company_public_key : publicKey,
     signature : jsonSignature,
     company_name: this.companyName
@@ -50,11 +52,14 @@ Colu.prototype.createRegistrationMessage = function(username) {
 }
 
 Colu.prototype.createRegistrationQR = function(registrationMessage) {
+  assertRegistrationMessage(registrationMessage)
   var dataURI = qr(JSON.stringify(registrationMessage), {type: 15, size: 10, level: 'L'})
   return dataURI
 }
 
 Colu.prototype.registerUser = function(registrationMessage, callback) {
+  assertRegistrationMessage(registrationMessage)
+  assert.equal(typeof(callback), 'function', 'Need callback function as last (second) argument.')
   request.post(coluHost + "/start_user_registration_to_company",
     {form: registrationMessage },
     function (err, response, body) {
@@ -81,6 +86,9 @@ Colu.prototype.registerUser = function(registrationMessage, callback) {
 }
 
 Colu.prototype.parseRegistrationBody = function(body) {
+  assert(body, 'Got error from server.')
+  assert('extended_public_key' in body, 'No extended_public_key return from server.')
+  assert('verified_client_signature' in body, 'No verified_client_signature return from server.')
   if (body && 'extended_public_key' in body) {
     return new User(body.extended_public_key)
   }
@@ -88,11 +96,13 @@ Colu.prototype.parseRegistrationBody = function(body) {
 }
 
 Colu.prototype.verifyUser = function(username, userId, addressIndex, callback) {
+  assert(username, 'Need username as first argument.')
+  assert(userId, 'Need userId as second argument.')
+  assert.equal(typeof(callback), 'function', 'Need callback function as last (fourth) argument.')
   addressIndex = addressIndex || 0
   var data_params = this.createRegistrationMessage(username)
   var user = new User(userId)
   data_params.client_address = user.getAddress(addressIndex)
-  console.log('address: '+data_params.client_address)
   data_params.token_details = 'token'
   request.post(coluHost + "/check_token_address",
     {form: data_params },
@@ -101,6 +111,9 @@ Colu.prototype.verifyUser = function(username, userId, addressIndex, callback) {
           return callback(err)
       }
       body = JSON.parse(body)
+      assert(body, 'Got error from server.')
+      assert('client_public_key' in body, 'No client_public_key return from server.')
+      assert('verified_client_signature' in body, 'No verified_client_signature return from server.')
       if (this.verifyMessage(data_params, body.verified_client_signature, body.client_public_key)) {
         return callback(null, body)
       }
@@ -122,6 +135,14 @@ Colu.prototype.verifyMessage = function(registrationMessage, clientSignature, cl
     return (publicKey.getAddress(this.network) == clientAddress) && ecdsa_verify(hash, clientSignature, publicKey)
   }
   return ecdsa_verify(hash, clientSignature, publicKey)
+}
+
+function assertRegistrationMessage(registrationMessage) {
+  assert(registrationMessage, 'Need registrationMessage as first parameter, use createRegistrationMessage(username)')
+  assert('message' in registrationMessage, 'registrationMessage not contains message, use createRegistrationMessage(username)')
+  assert('company_public_key' in registrationMessage, 'registrationMessage not contains company_public_key, use createRegistrationMessage(username)')
+  assert('signature' in registrationMessage, 'registrationMessage not contains signature, use createRegistrationMessage(username)')
+  assert('company_name' in registrationMessage, 'registrationMessage not contains company_name, use createRegistrationMessage(username)')
 }
 
 function ecdsaSign(message, privateKey) {

@@ -3,8 +3,9 @@ var bitcoin = require('bitcoinjs-lib')
 
 module.exports = User
 
-function User(extended_public_key) {
-  this.root = new bitcoin.HDNode.fromBase58(extended_public_key)
+function User(userId) {
+  assert(userId && ['xpub', 'xpri', 'tpub', 'tpri'].indexOf(userId.substr(0, 4)) > -1, 'Not a valid userId.')
+  this.root = new bitcoin.HDNode.fromBase58(userId)
 }
 
 User.prototype.getId = function() {
@@ -12,10 +13,15 @@ User.prototype.getId = function() {
 }
 
 User.prototype.getAddress = function(index) {
+  index = index || 0
   var addressNode = this.root.derive(0).derive(index)
   return addressNode.getAddress().toString()
 }
 
-User.prototype.getPublicKey = function(index) {
+User.prototype.getPublicKey = function() {
   return this.root.pubKey.toBuffer().toString('hex')
+}
+
+User.prototype.getChainCode = function() {
+  return this.root.chainCode.toString('hex')
 }
