@@ -37,13 +37,18 @@ Colu.prototype.createRegistrationMessage = function(username) {
   assert(username, 'Need username as first argument.')
   var rand = crypto.randomBytes(10)
   var rand = rand.toString('hex')
-  var utcTS = Date.now()
-  var message = username + ',' + utcTS + ',' + rand
-  var signature = ecdsaSign(message, this.privateKey)
+  var utcTS = Date.now().toString()
+  var message = {
+    username : username,
+    timestamp : utcTS,
+    rand : rand,
+  }
+  var messageStr = JSON.stringify(message)
+  var signature = ecdsaSign(messageStr, this.privateKey)
   var jsonSignature = JSON.stringify(signature)
   var publicKey = this.privateKey.pub.toHex()
   var registrationMessage = { 
-    message : message, 
+    message : messageStr, 
     company_public_key : publicKey,
     signature : jsonSignature,
     company_name: this.companyName
@@ -70,8 +75,7 @@ Colu.prototype.registerUser = function(registrationMessage, callback) {
       var user = this.parseRegistrationBody(body)
       if (user) {
         var client_public_key = user.getPublicKey()
-        if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key)) {
-        
+        if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
           return callback(null, user.getId())
         }
         else {
@@ -114,7 +118,7 @@ Colu.prototype.verifyUser = function(username, userId, addressIndex, callback) {
       assert(body, 'Got error from server.')
       assert('client_public_key' in body, 'No client_public_key return from server.')
       assert('verified_client_signature' in body, 'No verified_client_signature return from server.')
-      if (this.verifyMessage(data_params, body.verified_client_signature, body.client_public_key)) {
+      if (this.verifyMessage(data_params, body.verified_client_signature, body.client_public_key, body.verified)) {
         return callback(null, body)
       }
       else {
@@ -124,12 +128,17 @@ Colu.prototype.verifyUser = function(username, userId, addressIndex, callback) {
   )
 }
 
-Colu.prototype.verifyMessage = function(registrationMessage, clientSignature, clientPublicKey) {
+Colu.prototype.verifyMessage = function(registrationMessage, clientSignature, clientPublicKey, verified) {
   var message = registrationMessage.message
   var signature = registrationMessage.signature
   var clientAddress = registrationMessage.client_address
-  var clientMessage = message+';'+signature
-  var hash = crypto.createHash('sha256').update(clientMessage).digest()
+  var clientMessage = {
+    message : message,
+    signature : signature,
+    verified : verified,
+  }
+  var clientMessageStr = JSON.stringify(clientMessage);
+  var hash = crypto.createHash('sha256').update(clientMessageStr).digest()
   var publicKey = bitcoin.ECPubKey.fromHex(clientPublicKey)
   if (clientAddress) {
     return (publicKey.getAddress(this.network) == clientAddress) && ecdsa_verify(hash, clientSignature, publicKey)
