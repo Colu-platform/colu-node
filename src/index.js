@@ -62,11 +62,77 @@ Colu.prototype.createRegistrationQR = function(registrationMessage) {
   return dataURI
 }
 
-Colu.prototype.registerUser = function(registrationMessage, callback) {
+Colu.prototype.getRegistrationQR = function(registrationMessage, callback) {
   assertRegistrationMessage(registrationMessage)
   assert.equal(typeof(callback), 'function', 'Need callback function as last (second) argument.')
+  registrationMessage.by_code = true
   request.post(coluHost + "/start_user_registration_to_company",
     {form: registrationMessage },
+    function (err, response, body) {
+      if (err || !body) {
+          return callback(err)
+      }
+      body = JSON.parse(body)
+      if ('code' in body) {
+        var simpleQrLink = coluHost+"/qr?qr="+body.code
+        var dataURI = qr(simpleQrLink, {type: 5, size: 5, level: 'M'})
+        callback(null, body.code, dataURI)
+      }
+      else {
+        callback('No code returned from server')
+      }
+    }
+  )
+}
+
+Colu.prototype.registerUser = function(registrationMessage, code, callback) {
+  assertRegistrationMessage(registrationMessage)
+  if (typeof(code) == 'function') {
+    callback = code
+    code = null
+  }
+  assert.equal(typeof(callback), 'function', 'Need callback function as last (second) argument.')
+  var url = coluHost + "/start_user_registration_to_company"
+  var form
+  if (code) {
+    url = url+"_by_code"
+    form = {code : code}
+  }
+  else {
+    form = registrationMessage
+  }
+  request.post(url,
+    {form: form},
+    function (err, response, body) {
+      if (err) {
+          return callback(err)
+      }
+      body = JSON.parse(body)
+      var user = this.parseRegistrationBody(body)
+      if (user) {
+        var client_public_key = user.getPublicKey()
+        if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
+          return callback(null, user.getId())
+        }
+        else {
+          callback('Signature not verified.')
+        }
+      }
+      else {
+        callback('Wrong answer from server.')
+      }
+    }.bind(this)
+  )
+}
+
+Colu.prototype.registerUserByPhonenumber = function(registrationMessage, phonenumber, callback) {
+  assertRegistrationMessage(registrationMessage)
+  assert(phonenumber && typeof(phonenumber) == 'string', "No phonenumber.")
+  assert.equal(typeof(callback), 'function', 'Need callback function as last (third) argument.')
+  registrationMessage.phonenumber = phonenumber;
+  var url = coluHost + "/start_user_registration_to_company"
+  request.post(url,
+    {form: registrationMessage},
     function (err, response, body) {
       if (err) {
           return callback(err)
