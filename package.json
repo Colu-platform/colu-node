@@ -5,7 +5,6 @@
   "main": "./src/index.js",
   "dependencies": {
     "bigi": "^1.4.0",
-    "crypto": "^0.0.3",
     "bitcoinjs-lib": "^1.4.3",
     "qr-encode": "^0.3.0",
     "request": "^2.51.0"

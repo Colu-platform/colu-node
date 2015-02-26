@@ -223,19 +223,14 @@ function assertRegistrationMessage(registrationMessage) {
 function ecdsaSign(message, privateKey) {
   var shaMsg = crypto.createHash('sha256').update(message).digest()
   var signature = privateKey.sign(shaMsg)
-  var signatureHex = {}
-  signatureHex.s = signature.s.toString(16)
-  signatureHex.r = signature.r.toString(16)
-  if (signatureHex.s.length % 2 != 0) signatureHex.s = '0' + signatureHex.s
-  if (signatureHex.r.length % 2 != 0) signatureHex.r = '0' + signatureHex.r
-  return signatureHex
+  var signatureDER = signature.toDER()
+  var signatureDERStr = signatureDER.toString('base64')
+  console.log('signatureDERStr: '+signatureDERStr)
+  return signatureDERStr
 }
 
 function ecdsa_verify(hash, signature, publicKey) {
-  var json_signature = JSON.parse(signature)
-  var sig_obj = {}
-  sig_obj.s = bigi.fromHex(json_signature.s)
-  sig_obj.r = bigi.fromHex(json_signature.r)
+  var sig_obj = bitcoin.ECSignature.fromDER(new Buffer(signature, 'base64'));
   return isValid = publicKey.verify(hash, sig_obj)
 }
 
