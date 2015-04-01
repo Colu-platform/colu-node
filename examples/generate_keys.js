@@ -7,6 +7,5 @@ Colu.init('my_company', 'testnet', function(err, colu) {
     return console.log('err: '+err)
   }
   // This is your private seed, keep it safe!!!
-  console.log('seed: '+colu.getPrivateSeed())
-  console.log('nextAccount: '+colu.nextAccount)
+  console.log('Private seed: '+colu.getPrivateSeed())
 })

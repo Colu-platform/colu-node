@@ -9,8 +9,9 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   }
 
   var username = 'bobicbob20'
+  var assetId = 'od8U4iiVW6BEGPoSPXjmkJ1fREWF2bqVxn'
 
-  colu.verifyUser(username, 'od8U4iiVW6BEGPoSPXjmkJ1fREWF2bqVxn', function(err, data) {
+  colu.verifyUser(username, assetId, function(err, data) {
     if (err) {
       console.error('error: '+err)
     }

@@ -49,9 +49,10 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
         console.error('error: '+err)
       }
       else {
-        console.log('userId: '+data)
+        console.log('userId: '+data.userId)
+        console.log('assetId: '+data.assetId)
       }
     })
   })
 })
-// userId: tpubDDYsxVf9LYxR6PMSss1hM8XpKPMMH2hywpuwzf11DzcRYLGSgtpo3ucPkghjeUiyB7xA6qnXsEzMnJ7FyMaVWMfcFszpintAMh2221ybVZo
+

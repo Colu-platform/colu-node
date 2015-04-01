@@ -8,15 +8,16 @@ $ npm install colu-node
 ```
 
 ## Generate keys for your company:
-If you create an instance of the ```colu``` module with only the company name, the ```privateKey``` will generate randomly on your machine.  
-Your ```privateKey``` is what define your company.
+If you create an instance of the ```colu``` module with only the company name, the ```privateSeed``` will generate randomly on your machine.  
+Your ```privateSeed``` is what define your company.
 ```js
-var Colu = require('colu-node')
-var colu = new Colu('my_company', 'testnet')
-
-// This is your private key, keep it safe!!!
-console.log('WIF: '+colu.getWIF())
-
+Colu.init('my_company', 'testnet', function(err, colu) {
+  if (err) {
+    return console.log('err: '+err)
+  }
+  // This is your private seed, keep it safe!!!
+  console.log('Private seed: '+colu.getPrivateSeed())
+})
 ```
 
 ## Create instance from existing keys:
@@ -24,10 +25,18 @@ When you want to use our module in your server you need to do the generation of 
 ```js
 var Colu = require('colu-node')
 
-var privateKey = 'cQQy71GeXGeFWnDtypas2roY2qrk3KWjJLCxoFqc2wibXr2wWxie'
+var privateSeed = 'c507290be50bca9b787af39019f80e2f9f27e4020ee0a4fe51595ee4424d6150'
 
-var colu = new Colu('my_company', 'testnet', privateKey)
+Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
+  if (err) {
+    return console.log('err: '+err)
+  }
+  // This is your private seed, keep it safe!!!
+  console.log('seed: '+colu.getPrivateSeed())
+  
+})
 ```
+The colu instance returned in the callback function goes through a discovering processes of your active keys using [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) schemes.
 
 ## Register a user to 2FA:
 You can register a user to the Colu 2FA service on your our site with 3 simple steps:
@@ -51,20 +60,23 @@ You can register a user to the Colu 2FA service on your our site with 3 simple s
       console.error('error: '+err)
     }
     else {
-      console.log('userId: '+data)
+      console.log('userId: '+data.userId)
+      console.log('assetId: '+data.assetId)
     }
   })
   ```
 
-You should get back the ```userId``` you should save it in order to verify this user in the future.
+You should get back the ```userId``` and the ```assetId```.
+You need to save the ```assetId``` in order to verify this user in the future.
+You can also use the ```userId``` in order to send this register user other assets.
 
 ## Verify user:
 To verify a user all you need to do is:
 ```js
-var username = 'bob'
-var userId = 'tpubDCgCu2jpxrR7j9JwFQ959wSkNwPQFNQvJJMFnikg1Sb4tkDnBNYaS3Sc1BxKL71hk3jPkQStEY1VE9mTaQjF8kDfEhzxjWid7eVK5F7nWi5'
+var username = 'bobic'
+var assetId = 'od8U4iiVW6BEGPoSPXjmkJ1fREWF2bqVxn'
 
-colu.verifyUser(username, userId, 0, function(err, data) {
+colu.verifyUser(username, assetId, function(err, data) {
   if (err) {
     console.error('error: '+err)
   }
@@ -73,4 +85,4 @@ colu.verifyUser(username, userId, 0, function(err, data) {
   }
 })
 ```
-This will send a push to the user mobile application and prompt him to sign on your message, you will receive the user signature and verify it locally.
+This will send a push to the user that holds the asset mobile application and prompt him to sign on your message, you will receive the user signature and verify it locally.
