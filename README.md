@@ -39,7 +39,8 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
 The colu instance returned in the callback function goes through a discovering processes of your active keys using [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) schemes.
 
 ## Register a user to 2FA:
-You can register a user to the Colu 2FA service on your our site with 3 simple steps:
+### Register by QR code:
+You can register a user to the Colu 2FA service on your site by QR with 3 simple steps:
 
 1. Create a registration message:
 
@@ -65,10 +66,28 @@ You can register a user to the Colu 2FA service on your our site with 3 simple s
     }
   })
   ```
-
-You should get back the ```userId``` and the ```assetId```.
+The user need to scan the QR code with the Colu mobile application and approve the registration.
+After that you should get back the ```userId``` and the ```assetId```.
 You need to save the ```assetId``` in order to verify this user in the future.
 You can also use the ```userId``` in order to send this register user other assets.
+
+### Register by phone number:
+You can also register a user with his phone number:
+
+Just replace the step 3 in the Register by QR code section to:
+```js
+var phonenumber = '+1234567890'
+
+colu.registerUserByPhonenumber(registrationMessage, phonenumber, function(err, data) {
+  if (err) {
+    console.error('error: '+err)
+  }
+  else {
+    console.log('userId: '+data.userId)
+    console.log('assetId: '+data.assetId)
+  }
+})
+```
 
 ## Verify user:
 To verify a user all you need to do is:
@@ -86,3 +105,4 @@ colu.verifyUser(username, assetId, function(err, data) {
 })
 ```
 This will send a push to the user that holds the asset mobile application and prompt him to sign on your message, you will receive the user signature and verify it locally.
+ 
