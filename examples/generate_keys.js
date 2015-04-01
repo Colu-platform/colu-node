@@ -2,5 +2,11 @@
 var Colu = require('../src/index.js')
 var colu = new Colu('my_company', 'testnet')
 
-// This is your private key, keep it safe!!!
-console.log('WIF: '+colu.getWIF())
+Colu.init('my_company', 'testnet', function(err, colu) {
+  if (err) {
+    return console.log('err: '+err)
+  }
+  // This is your private seed, keep it safe!!!
+  console.log('seed: '+colu.getPrivateSeed())
+  console.log('nextAccount: '+colu.nextAccount)
+})

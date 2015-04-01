@@ -4,6 +4,7 @@
   "description": "Colu SDK for node.js developers",
   "main": "./src/index.js",
   "dependencies": {
+    "async": "^0.9.0",
     "bigi": "^1.4.0",
     "bitcoinjs-lib": "^1.4.3",
     "qr-encode": "^0.3.0",
