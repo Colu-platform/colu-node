@@ -1,5 +1,6 @@
 //var Colu = require('colu-node')
 var Colu = require('../src/index.js')
+var User = require('../src/user.js')
 
 var privateSeed = 'c507290be50bca9b987af39019f80e1f9f17e4020ee0a4fe51595ee4424d6150'
 
@@ -45,13 +46,16 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
     // Now you can show the QR to the user to scan, and prompt our server for an answer when the user register successfully:
 
     colu.registerUser(registrationMessage, code, function(err, data) {
-      if (err) {
-        console.error('error: '+err)
-      }
-      else {
-        console.log('userId: '+data.userId)
-        console.log('assetId: '+data.assetId)
-      }
+      if (err) return console.log('Error: '+ JSON.stringify(err))
+      console.log('userId: '+data.userId)
+//        console.log('assetId: '+data.assetId)
+      var username = colu.getUsername(registrationMessage)
+      var accountIndex = colu.hdwallet[registrationMessage.company_public_key].accountIndex
+      var user = new User(data.userId)
+      return colu.issueAndSend(username, accountIndex, user, function (err, assetId) {
+        if (err) return console.log('Error: '+ JSON.stringify(err))
+        console.log('assetId: '+assetId)
+      })
     })
   })
 })

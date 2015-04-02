@@ -8,8 +8,8 @@ var async = require('async')
 var crypto = require('crypto')
 var User = require('./user.js')
 
-//var coluHost = 'http://127.0.0.1'
-var coluHost = 'https://dev.colu.co'
+var coluHost = 'http://127.0.0.1'
+//var coluHost = 'https://dev.colu.co'
 var coloredCoinsHost = 'http://api.colu.co/v1'
 
 var MAX_EMPTY_ACCOUNTS = 3
@@ -74,7 +74,7 @@ Colu.prototype.discover = function(callback) {
       if (err) return callback(err)
       this.needToDiscover = false
       callback()
-    }
+    }.bind(this)
   )
 }
 
@@ -118,7 +118,7 @@ Colu.prototype.getPrivateSeed = function() {
 
 Colu.prototype.createRegistrationMessage = function(username, account) {
   assert(username, 'Need username as first argument.')
-  assert(this.needToDiscover, 'Account need to go through discovery process using this.discover(callback) method')
+  assert(this.needToDiscover == false, 'Account need to go through discovery process using this.discover(callback) method')
   var rand = crypto.randomBytes(10)
   var rand = rand.toString('hex')
   var utcTS = Date.now().toString()
@@ -208,9 +208,6 @@ Colu.prototype.registerUser = function(registrationMessage, code, callback) {
   }
   assert.equal(typeof(callback), 'function', 'Need callback function as last argument.')
   var user
-  var username
-  var accountIndex
-  var issuance
   async.waterfall([
     function(cb) {
       var url = coluHost + "/start_user_registration_to_company"
@@ -235,11 +232,12 @@ Colu.prototype.registerUser = function(registrationMessage, code, callback) {
       body = JSON.parse(body)
       user = this.parseRegistrationBody(body)
       if (user) {
-        var client_public_key = user.getPublicKey()
+        var client_public_key = user.getRootPublicKey()
         if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
-          username = getUsername(registrationMessage)
-          accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
-          return this.issueAndSend(username, accountIndex, user, cb)
+//          var username = getUsername(registrationMessage)
+//          var accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
+//          return this.issueAndSend(username, accountIndex, user, cb)
+          return cb(null) //TODO: remove
         }
         else {
           cb('Signature not verified.')
@@ -256,7 +254,7 @@ Colu.prototype.registerUser = function(registrationMessage, code, callback) {
     }
     var data = {
       userId : user.getId(),
-      assetId : assetId,
+//      assetId : assetId,
     }
     return callback(null, data)
   })
@@ -284,11 +282,12 @@ Colu.prototype.registerUserByPhonenumber = function(registrationMessage, phonenu
       
       user = this.parseRegistrationBody(body)
       if (user) {
-        var client_public_key = user.getPublicKey()
+        var client_public_key = user.getRootPublicKey()
         if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
-          username = getUsername(registrationMessage)
-          accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
-          return this.issueAndSend(username, accountIndex, user, cb)
+//          var username = getUsername(registrationMessage)
+//          var accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
+//          return this.issueAndSend(username, accountIndex, user, cb)
+          return cb(null) //TODO: remove
         }
         else {
           cb('Signature not verified.')
@@ -305,7 +304,7 @@ Colu.prototype.registerUserByPhonenumber = function(registrationMessage, phonenu
     }
     var data = {
       userId : user.getId(),
-      assetId : assetId,
+//      assetId : assetId,
     }
     return callback(null, data)
   })
@@ -328,8 +327,22 @@ Colu.prototype.issueAndSend = function(username, accountIndex, user, callback) {
       assetId = issuance.assetId
       this.send(CCAddress, accountIndex, assetId, 1, cb)
     }.bind(this),
+    // TODO: Financing the receiving address for debug purpose --- need to be removed.
     function(data, cb) {
       console.log('send data: '+data)
+      var data_params = {
+        company_public_key : user.getPublicKey(),
+        purpose : 'Issue',
+        amount : 1,
+      }
+      request.post(coluHost + "/dumb_finance",
+      {form: data_params },
+      cb)
+    },
+    function(response, body, cb) {
+      if (response.statusCode != 200) {
+        return cb(body)
+      }
       cb(null, assetId)
     },
   ],
@@ -396,7 +409,7 @@ Colu.prototype.verifyMessage = function(registrationMessage, clientSignature, cl
 }
 
 Colu.prototype.issue = function(username, account, amount, callback) {
-  assert(this.needToDiscover, 'Account need to go through discovery process using this.discover(callback) method')
+  assert(this.needToDiscover == false, 'Account need to go through discovery process using this.discover(callback) method')
   assert(username, 'Need username as first argument.')
   assert(typeof(account) == 'number', 'Need account index as second argument.')
   if (typeof(amount) == 'function') {
@@ -509,7 +522,7 @@ Colu.prototype.issueWithAttempts = function(publicKey, username, amount, attempt
 }
 
 Colu.prototype.send = function(address, account, assetId, amount, callback) {
-  assert(this.needToDiscover, 'Account need to go through discovery process using this.discover(callback) method')
+  assert(this.needToDiscover == false, 'Account need to go through discovery process using this.discover(callback) method')
   assert(address, 'Need address as firdt argument.')
   assert(typeof(account) == 'number', 'Need account index as second argument.')
   assert(assetId, 'Need assetId as third argument.')
@@ -625,7 +638,7 @@ Colu.prototype.sendWithAttempts = function(publicKey, address, amount, assetId, 
   })
 }
 
-function getUsername(registrationMessage) {
+Colu.prototype.getUsername = function(registrationMessage) {
   assertRegistrationMessage(registrationMessage)
   var message = registrationMessage.message
   message = JSON.parse(message)
