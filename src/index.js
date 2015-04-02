@@ -518,7 +518,7 @@ Colu.prototype.issueWithAttempts = function(publicKey, username, amount, attempt
       return callback(JSON.stringify(body))
     }
     return callback(err, response, body)
-  })
+  }.bind(this))
 }
 
 Colu.prototype.send = function(address, account, assetId, amount, callback) {
@@ -635,7 +635,7 @@ Colu.prototype.sendWithAttempts = function(publicKey, address, amount, assetId, 
       return callback(JSON.stringify(body))
     }
     return callback(err, response, body)
-  })
+  }.bind(this))
 }
 
 Colu.prototype.getUsername = function(registrationMessage) {
