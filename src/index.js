@@ -438,15 +438,10 @@ Colu.prototype.issue = function(username, account, amount, callback) {
         return callback(body)
       }
       body = JSON.parse(body)
-      /*
-      var txid = body.txid
-      var index = body.index
-      var return_address = body.return_address
-      var return_fee = body.return_fee
-      */
+      
       return waitForBlock(callback)
     },
-    function (blockHeight, callback) {
+    function (blockHeight, callback) {          
       return this.issueWithAttempts(publicKey, username, amount, 3, 60*1000, callback)
     }.bind(this),
     function (response, body, callback) {
@@ -505,7 +500,7 @@ Colu.prototype.issueWithAttempts = function(publicKey, username, amount, attempt
     if (response.statusCode != 200) {
       if (--attempts > 0) {
         console.log('Issue failed, trying another attempt.')
-        return setTimeout(this.issueWithAttempts, deley, publicKey, username, amount, attempts, deley, callback)
+        return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
       }
       return callback(body)
     }
@@ -513,7 +508,7 @@ Colu.prototype.issueWithAttempts = function(publicKey, username, amount, attempt
     if ('message' in body || 'error' in body) {
       if (--attempts > 0) {
         console.log('Issue failed, trying another attempt.')
-        return setTimeout(this.issueWithAttempts, deley, publicKey, username, amount, attempts, deley, callback)
+        return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
       }
       return callback(JSON.stringify(body))
     }
@@ -621,8 +616,8 @@ Colu.prototype.sendWithAttempts = function(publicKey, address, amount, assetId, 
     
     if (response.statusCode != 200) {
       if (--attempts > 0) {
-        console.log('Sens failed, trying another attempt.')
-        return setTimeout(this.sendWithAttempts, deley, publicKey, address, amount, assetId, attempts, deley, callback)
+        console.log('Send failed, trying another attempt.')
+        return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
       }
       return callback(body)
     }
@@ -630,7 +625,7 @@ Colu.prototype.sendWithAttempts = function(publicKey, address, amount, assetId, 
     if ('message' in body || 'error' in body) {
       if (--attempts > 0) {
         console.log('Send failed, trying another attempt.')
-        return setTimeout(this.sendWithAttempts, deley, publicKey, address, amount, assetId, attempts, deley, callback)
+        return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
       }
       return callback(JSON.stringify(body))
     }

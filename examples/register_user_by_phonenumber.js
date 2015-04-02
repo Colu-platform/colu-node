@@ -2,7 +2,7 @@
 var Colu = require('../src/index.js')
 var User = require('../src/user.js')
 
-var privateSeed = 'c507290be51cca9b787af39019f80e2f9f27e4020ee0a4fe51695ee4424d6150'
+var privateSeed = 'c507290be51cca9b787af39019f80e2faf27e4020ee0a4fe51695ee4424d6150'
 
 Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   if (err) {
@@ -11,9 +11,9 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   // This is your private seed, keep it safe!!!
   console.log('seed: '+colu.getPrivateSeed())
 
-  var username = 'bobicbob45'
+  var username = 'bobicbob52'
 
-  var phonenumber = '+1234567890'
+  var phonenumber = '+1234567890123'
   var registrationMessage = colu.createRegistrationMessage(username)
 
   colu.registerUserByPhonenumber(registrationMessage, phonenumber, function(err, data) {
