@@ -14,6 +14,7 @@ var coloredCoinsHost = 'http://api.colu.co/v1'
 
 var MAX_EMPTY_ACCOUNTS = 3
 var MAX_EMPTY_ADDRESSES = 3
+var ASKING_INTERVAL = 4
 
 module.exports = Colu
 
@@ -86,15 +87,20 @@ Colu.prototype.discoverAccount = function(accountIndex, callback) {
     function () { return emptyAddresses < MAX_EMPTY_ADDRESSES },
     function (cb) {
       console.log('discovering address: '+currentAddresses)
-      this.discoverAddress(accountIndex, currentAddresses++, function (err, res) {
+      this.discoverAddresses(accountIndex, currentAddresses, ASKING_INTERVAL, function (err, res) {
         if (err) return cb(err)
-        if (res.active) {
-          emptyAddresses = 0
-          active = true
-          console.log('active')
-        } else {
-          emptyAddresses++
-          console.log('inactive')
+        currentAddresses+=ASKING_INTERVAL
+        console.log(JSON.stringify(res))
+        for (var i=0; i<ASKING_INTERVAL; i++) {
+          address_obj = res[i]
+          if (address_obj.active) {
+            emptyAddresses = 0
+            active = true
+            console.log('active')
+          } else {
+            emptyAddresses++
+            console.log('inactive')
+          }
         }
         cb()
       })
@@ -110,6 +116,17 @@ Colu.prototype.discoverAddress = function(accountIndex, addressIndex, callback) 
   var address = hdnode.getAddress().toString()
   console.log('address: '+address)
   isAddressActive(address, callback)
+}
+
+Colu.prototype.discoverAddresses = function(accountIndex, addressIndex, interval, callback) {
+  var addresses = []
+  for (var i=0; i<interval; i++) {
+    var hdnode = deriveAddress(this.master, accountIndex, addressIndex++)
+    var address = hdnode.getAddress().toString()
+    addresses.push(address)
+    console.log('address: '+address)
+  }
+  isAddressesActive(addresses, callback)
 }
 
 Colu.prototype.getPrivateSeed = function() {
@@ -644,6 +661,22 @@ Colu.prototype.getUsername = function(registrationMessage) {
 function isAddressActive(address, callback) {
   request.post(coluHost + "/is_address_active",
     {form: {address : address}},
+    function (err, response, body) {
+      if (err) {
+        return callback(err)
+      }
+      if (response.statusCode != 200) {
+        return callback(body)
+      }
+      body = JSON.parse(body)
+      return callback(null, body)
+    }
+  )
+}
+
+function isAddressesActive(addresses, callback) {
+  request.post(coluHost + "/is_addresses_active",
+    {form: {addresses : addresses}},
     function (err, response, body) {
       if (err) {
         return callback(err)
