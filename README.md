@@ -1,5 +1,5 @@
 # Colu-Node
-[![Build Status](https://travis-ci.org/Colu-platform/Colu-Node.svg?branch=master)](https://travis-ci.org/Colu-platform/colu-node) [![Coverage Status](https://coveralls.io/repos/Colu-platform/Colu-Node/badge.svg?branch=master)](https://coveralls.io/r/Colu-platform/Colu-Node?branch=master) [![npm version](https://badge.fury.io/js/colu.svg)](http://badge.fury.io/js/colu)
+[![Build Status](https://travis-ci.org/Colu-platform/colu-node.svg?branch=master)](https://travis-ci.org/Colu-platform/colu-node) [![Coverage Status](https://coveralls.io/repos/Colu-platform/colu-node/badge.svg?branch=master)](https://coveralls.io/r/Colu-platform/colu-node?branch=master) [![npm version](https://badge.fury.io/js/colu.svg)](http://badge.fury.io/js/colu)
 
 SDK in Node.Js for Colu.co
 
@@ -10,7 +10,7 @@ $ npm install colu-node
 ```
 
 ## Generate keys for your company:
-If you create an instance of the ```colu``` module with only the company name, the ```privateSeed``` will generate randomly on your machine.  
+If you create an instance of the ```colu``` module with only the company name, the ```privateSeed``` will generate randomly on your machine.
 Your ```privateSeed``` is what define your company.
 ```js
 Colu.init('my_company', 'testnet', function(err, colu) {
@@ -35,7 +35,7 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   }
   // This is your private seed, keep it safe!!!
   console.log('seed: '+colu.getPrivateSeed())
-  
+
 })
 ```
 The colu instance returned in the callback function goes through a discovering processes of your active keys using [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) schemes.
@@ -49,12 +49,12 @@ You can register a user to the Colu 2FA service on your site by QR with 3 simple
   ```js
   var username = 'bob'
   var registrationMessage = colu.createRegistrationMessage(username)
-  ```  
+  ```
 2. Create a registration QR code:
 
   ```js
   var qr = colu.createRegistrationQR(registrationMessage);
-  ```  
+  ```
 3. Show to the user the QR code in your site to scan with our mobile application, and prompt our server:
 
  ```js
@@ -107,4 +107,3 @@ colu.verifyUser(username, assetId, function(err, data) {
 })
 ```
 This will send a push to the user that holds the asset mobile application and prompt him to sign on your message, you will receive the user signature and verify it locally.
- 
