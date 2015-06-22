@@ -10,10 +10,10 @@ var User = require('./user.js')
 var FileSystem = require('./filesystem.js')
 
 // var coluHost = (properties && properties.colu_sdk && properties.colu_sdk.host) || 'https://dev.colu.co'
-var coluHost = 'http://localhost'
-// var coluHost = 'https://dev.colu.co'
-// var coloredCoinsHost = 'http://api.colu.co/v2'
-var coloredCoinsHost = 'http://10.0.0.73:8080/v2'
+// var coluHost = 'http://localhost'
+var coluHost = 'https://dev.colu.co'
+var coloredCoinsHost = 'http://api.coloredcoins.org/v2'
+// var coloredCoinsHost = 'http://10.0.0.25:8080/v2'
 
 var MAX_EMPTY_ACCOUNTS = 3
 var MAX_EMPTY_ADDRESSES = 3
@@ -302,6 +302,7 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
     },
     function (response, body, cb) {
       if (response.statusCode !== 200) {
+        logger.error('!!!!'+body)
         return cb(body)
       }
       body = JSON.parse(body)
@@ -311,7 +312,7 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
          var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-         return self.ccIssueFinnenced(accountIndex, user, cb)
+         return self.ccIssueFinanced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -366,7 +367,7 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
         var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-        return self.ccIssueFinnenced(accountIndex, user, cb)
+        return self.ccIssueFinanced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -380,7 +381,7 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
       var url = coluHost + '/finish_registration_to_company'
       request.post(
         url,
-        {form: assetInfo},
+        {form: {asset_data: assetInfo}},
         cb
       )
     }
@@ -551,16 +552,16 @@ Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, c
 //   )
 // }
 
-Colu.prototype.ccIssueFinnenced = function (account, user, callback) {
+Colu.prototype.ccIssueFinanced = function (account, user, callback) {
   assert(this.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
   var toAddress = user.getAddress()
   var publicKey = this.getPublicKey(account)
   var assetInfo
   var last_txid
-  console.log('account: '+account)
   async.waterfall([
     // Ask for finance.
-    function (callback) {
+    function (cb) {
+      logger.debug('asking for money')
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Issue',
@@ -568,20 +569,23 @@ Colu.prototype.ccIssueFinnenced = function (account, user, callback) {
       }
       request.post(coluHost + '/ask_for_finance',
       {form: data_params },
-      callback)
+      cb)
     },
-    function (response, body, callback) {
+    function (response, body, cb) {
       if (response.statusCode !== 200) {
-        return callback(body)
+        return cb(body)
       }
+      logger.debug('got money')
       body = JSON.parse(body)
       last_txid = body.txid
-      return this.accessCCIssue(publicKey, toAddress, body.txid, body.vout, callback)
+      return this.accessCCIssue(publicKey, toAddress, body.txid, body.vout, cb)
     }.bind(this),
-    function (response, body, callback) {
+    function (response, body, cb) {
       if (response.statusCode !== 200) {
-        return callback(body)
+        logger.debug('?????'+body)
+        return cb(body)
       }
+      logger.debug('got issue tx')
       console.log(body)
       body = JSON.parse(body)
       assetInfo = body
@@ -593,15 +597,16 @@ Colu.prototype.ccIssueFinnenced = function (account, user, callback) {
       }
       request.post(coluHost + '/transmit_financed',
       {form: data_params },
-      callback)
+      cb)
     }.bind(this),
-    function (response, body, callback) {
+    function (response, body, cb) {
       if (response.statusCode !== 200) {
-        return callback(body)
+        return cb(body)
       }
+      logger.debug('transmited')
       body = JSON.parse(body)
       assetInfo.txid = body.txid2
-      callback(null, assetInfo)
+      cb(null, assetInfo)
     }
     ],
     callback
@@ -673,6 +678,7 @@ Colu.prototype.ccIssue = function (args, callback) {
 
 Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callback) {
   var self = this
+  console.log(publicKey.getAddress(this.network).toString())
   args = {
     issueAddress: publicKey.getAddress(this.network).toString(),
     amount: 1,
@@ -740,7 +746,7 @@ Colu.prototype.ccSend = function (args, callback) {
   var data_params = { 
     fee: args.fee || FEE,
     from: args.from || null,
-    to: [
+    transfer: [
       {
         address: args.toAddress || null,
         amount: args.toAmount || 1,
@@ -757,13 +763,13 @@ Colu.prototype.ccSend = function (args, callback) {
     data_params.to = args.to
   }
 
-  console.log('from: '+args.from)
-  return request.post(coloredCoinsHost + '/sendasset',
+
+  return request.post(coloredCoinsHost + '/send',
     {form: data_params},
     callback)
 }
 
-Colu.prototype.ccSendFinnenced = function (account, toAddress, assetId, amount, callback) {
+Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, callback) {
   var self = this
   assert(self.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
   var publicKey = self.getPublicKey(account)
@@ -789,7 +795,7 @@ Colu.prototype.ccSendFinnenced = function (account, toAddress, assetId, amount, 
       lastTxid = body.txid
 
       var sendArgs = {
-        fee: FEE,
+        fee: Fee,
         from: publicKey.getAddress(self.network).toString(),
         toAddress: toAddress,
         toAmount: amount,
