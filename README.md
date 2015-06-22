@@ -1,5 +1,7 @@
-# Colu-node
-Colu platform, node.js SDK
+# Colu-Node
+[![Build Status](https://travis-ci.org/Colu-platform/Colu-Node.svg?branch=master)](https://travis-ci.org/Colu-platform/colu-node) [![Coverage Status](https://coveralls.io/repos/Colu-platform/Colu-Node/badge.svg?branch=master)](https://coveralls.io/r/Colu-platform/Colu-Node?branch=master) [![npm version](https://badge.fury.io/js/colu.svg)](http://badge.fury.io/js/colu)
+
+SDK in Node.Js for Colu.co
 
 ## Install
 

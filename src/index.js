@@ -18,7 +18,7 @@ var coloredCoinsHost = 'http://api.coloredcoins.org/v2'
 var MAX_EMPTY_ACCOUNTS = 3
 var MAX_EMPTY_ADDRESSES = 3
 var ASKING_INTERVAL = 4
-var NUM_OF_ATTEMPTS = 10
+// var NUM_OF_ATTEMPTS = 10
 
 var FEE = 1000
 
@@ -63,19 +63,18 @@ Colu.prototype.getNextAccount = function (callback) {
   var self = this
   // if (this.has_redis) {
   //   console.log('getNextAccount')
-    return self.redisClient.get('coluSdkNextAccount', function(err, nextAccount) {
-      if (err) {
-        if (self.fs) {
-          nextAccount = self.fs.get('coluSdkNextAccount') || 0
-          return callback(nextAccount)
-        } else {
-          return callback(this.nextAccount)
-        }
-
-      } else {
+  return self.redisClient.get('coluSdkNextAccount', function (err, nextAccount) {
+    if (err) {
+      if (self.fs) {
+        nextAccount = self.fs.get('coluSdkNextAccount') || 0
         return callback(nextAccount)
+      } else {
+        return callback(this.nextAccount)
       }
-    })
+    } else {
+      return callback(nextAccount)
+    }
+  })
 
   // } else {
   //   callback(this.nextAccount)
@@ -94,6 +93,11 @@ Colu.prototype.setNextAccount = function (nextAccount) {
 }
 
 Colu.init = function (companyName, network, privateSeed, redisPort, redisHost, callback) {
+  if (typeof privateSeed === 'function') {
+    callback = privateSeed
+    privateSeed = null
+  }
+
   if (typeof redisPort === 'function') {
     callback = redisPort
     redisPort = null
@@ -302,7 +306,7 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
     },
     function (response, body, cb) {
       if (response.statusCode !== 200) {
-        logger.error('!!!!'+body)
+        console.error('!!!!' + body)
         return cb(body)
       }
       body = JSON.parse(body)
@@ -311,8 +315,8 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
         var client_public_key = user.getRootPublicKey()
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
-         var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-         return self.ccIssueFinanced(accountIndex, user, cb)
+          var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
+          return self.ccIssueFinanced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -366,8 +370,8 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
         var client_public_key = user.getRootPublicKey()
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
-        var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-        return self.ccIssueFinanced(accountIndex, user, cb)
+          var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
+          return self.ccIssueFinanced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -394,7 +398,7 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
   })
 }
 
-//--------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------
 
 // Colu.prototype.issueAndSend = function (username, accountIndex, user, callback) {
 //   var assetId
@@ -561,11 +565,11 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
   async.waterfall([
     // Ask for finance.
     function (cb) {
-      logger.debug('asking for money')
+      console.log('asking for money')
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Issue',
-        amount: 1800 //TODO: calc min dust
+        amount: 1800 // TODO: calc min dust
       }
       request.post(coluHost + '/ask_for_finance',
       {form: data_params },
@@ -575,22 +579,22 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
       if (response.statusCode !== 200) {
         return cb(body)
       }
-      logger.debug('got money')
+      console.log('got money')
       body = JSON.parse(body)
       last_txid = body.txid
       return this.accessCCIssue(publicKey, toAddress, body.txid, body.vout, cb)
     }.bind(this),
     function (response, body, cb) {
       if (response.statusCode !== 200) {
-        logger.debug('?????'+body)
+        console.log('?????' + body)
         return cb(body)
       }
-      logger.debug('got issue tx')
+      console.log('got issue tx')
       console.log(body)
       body = JSON.parse(body)
       assetInfo = body
       var signedTxHex = signTx(body.txHex, this.getPrivateKey(account))
-      console.log('signTx: '+signedTxHex)
+      console.log('signTx: ' + signedTxHex)
       var data_params = {
         last_txid: last_txid,
         tx_hex: signedTxHex
@@ -603,7 +607,7 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
       if (response.statusCode !== 200) {
         return cb(body)
       }
-      logger.debug('transmited')
+      console.log('transmited')
       body = JSON.parse(body)
       assetInfo.txid = body.txid2
       cb(null, assetInfo)
@@ -648,13 +652,13 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
 // }
 
 Colu.prototype.ccIssue = function (args, callback) {
-  var data_params = { 
+  var data_params = {
     issueAddress: args.issueAddress || null,
     amount: args.amount || 1,
     fee: args.fee || FEE,
     reissueable: args.reissueable || false,
     flags: {
-      injectPreviousOutput: (args.injectPreviousOutput) === false ? false: true
+      injectPreviousOutput: (args.injectPreviousOutput) === false ? false : true
     },
     divisibility: args.divisibility || 0,
     transfer: [
@@ -669,8 +673,6 @@ Colu.prototype.ccIssue = function (args, callback) {
   if (args.transfers) {
     data_params.transfer = args.transfers
   }
-
-
   return request.post(coloredCoinsHost + '/issue',
     {form: data_params},
     callback)
@@ -679,7 +681,7 @@ Colu.prototype.ccIssue = function (args, callback) {
 Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callback) {
   var self = this
   console.log(publicKey.getAddress(this.network).toString())
-  args = {
+  var args = {
     issueAddress: publicKey.getAddress(this.network).toString(),
     amount: 1,
     reissueable: true,
@@ -741,9 +743,8 @@ Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callb
 //   }.bind(this))
 // }
 
-
 Colu.prototype.ccSend = function (args, callback) {
-  var data_params = { 
+  var data_params = {
     fee: args.fee || FEE,
     from: args.from || null,
     transfer: [
@@ -754,7 +755,7 @@ Colu.prototype.ccSend = function (args, callback) {
       }
     ],
     flags: {
-      injectPreviousOutput: (args.injectPreviousOutput) === false ? false: true
+      injectPreviousOutput: (args.injectPreviousOutput) === false ? false : true
     },
     financeOutput: args.financeOutput,
     financeOutputTxid: args.financeOutputTxid
@@ -762,8 +763,6 @@ Colu.prototype.ccSend = function (args, callback) {
   if (args.to) {
     data_params.to = args.to
   }
-
-
   return request.post(coloredCoinsHost + '/send',
     {form: data_params},
     callback)
@@ -781,7 +780,7 @@ Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, c
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Send',
-        amount: 1800 //TODO: calc min dust
+        amount: 1800 // TODO: calc min dust
       }
       request.post(coluHost + '/ask_for_finance',
       {form: data_params },
@@ -795,7 +794,7 @@ Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, c
       lastTxid = body.txid
 
       var sendArgs = {
-        fee: Fee,
+        fee: FEE,
         from: publicKey.getAddress(self.network).toString(),
         toAddress: toAddress,
         toAmount: amount,
@@ -813,7 +812,7 @@ Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, c
       body = JSON.parse(body)
       sendInfo = body
       var signedTxHex = signTx(body.txHex, self.getPrivateKey(account))
-      console.log('signTx: '+signedTxHex)
+      console.log('signTx: ' + signedTxHex)
       var data_params = {
         last_txid: lastTxid,
         tx_hex: signedTxHex
@@ -1105,23 +1104,23 @@ function waitForConfirmation (txids, callback) {
   )
 }
 
-function getCCAddress (address, callback) {
-  var data_params = {
-    'address': address,
-    'email': 'string'
-  }
+// function getCCAddress (address, callback) {
+//   var data_params = {
+//     'address': address,
+//     'email': 'string'
+//   }
 
-  request.post(coloredCoinsHost + '/coloraddress',
-    {form: data_params},
-    function (err, response, body) {
-      if (err) {
-        return callback(err)
-      }
-      if (response.statusCode !== 200) {
-        return callback(body)
-      }
-      body = JSON.parse(body)
-      return callback(null, body.adress)
-    }
-  )
-}
+//   request.post(coloredCoinsHost + '/coloraddress',
+//     {form: data_params},
+//     function (err, response, body) {
+//       if (err) {
+//         return callback(err)
+//       }
+//       if (response.statusCode !== 200) {
+//         return callback(body)
+//       }
+//       body = JSON.parse(body)
+//       return callback(null, body.adress)
+//     }
+//   )
+// }

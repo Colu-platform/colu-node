@@ -1,6 +1,6 @@
 {
-  "name": "colu-node",
-  "version": "0.1.1",
+  "name": "colu",
+  "version": "0.1.0",
   "description": "Colu SDK for node.js developers",
   "main": "./src/index.js",
   "dependencies": {
@@ -14,7 +14,9 @@
     "redis": "^0.12.1",
     "request": "^2.51.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mocha": "^2.2.5"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Colu-platform/colu-node.git"
@@ -29,10 +31,22 @@
     "coloredcoins",
     "2fa"
   ],
-  "author": "Tal Beja",
+  "contributors": [{
+    "name": "Tal Beja",
+    "email": "tal@colu.co"
+  },
+  {
+    "name": "thehobbit85",
+    "email": "eliran@colu.co"
+  }],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/Colu-platform/colu-node/issues"
   },
-  "homepage": "https://github.com/Colu-platform/colu-node"
+  "scripts": {
+    "test": "mocha",
+    "coverage": "istanbul cover _mocha -- -R spec",
+    "coveralls": "cat ./coverage/lcov.info | coveralls"
+  },
+  "homepage": "https://colu.co"
 }
