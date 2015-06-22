@@ -10,9 +10,9 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   // This is your private seed, keep it safe!!!
   console.log('seed: '+colu.getPrivateSeed())
   
-  var nextAccount = 1 //colu.nextAccount
+  var nextAccount = 113 //colu.nextAccount
   console.log('nextAccount: '+colu.nextAccount)
-  colu.send('bWy1S6rUnwV2H6vVXfzRH6h6DRZeBSVVUyx', nextAccount, 'oZLEiyjvsB6JNECuKCZ1v6UU4JE4SwvRhv', function(err, data) {
+  colu.ccSendFinnenced(nextAccount, 'mxwSkkj7M6RVU1TTAneqvmVDgQ81U4B5r1', 'UYCLgKh87n2PZUcndwig5HJkBHPsSSWgzT', 1, function(err, data) {
     if (err) {
       console.error('error: '+err)
     }

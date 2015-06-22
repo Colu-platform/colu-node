@@ -7,7 +7,11 @@
     "async": "^0.9.0",
     "bigi": "^1.4.0",
     "bitcoinjs-lib": "^1.4.3",
+    "jsonfile": "^2.0.0",
+    "mkpath": "^0.1.0",
+    "path-extra": "^1.0.2",
     "qr-encode": "^0.3.0",
+    "redis": "^0.12.1",
     "request": "^2.51.0"
   },
   "devDependencies": {},

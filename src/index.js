@@ -5,43 +5,107 @@ var qr = require('qr-encode')
 var assert = require('assert')
 var async = require('async')
 var crypto = require('crypto')
+var redis = require('redis')
 var User = require('./user.js')
+var FileSystem = require('./filesystem.js')
 
+// var coluHost = (properties && properties.colu_sdk && properties.colu_sdk.host) || 'https://dev.colu.co'
 var coluHost = 'http://localhost'
 // var coluHost = 'https://dev.colu.co'
-var coloredCoinsHost = 'http://api.colu.co/v1'
+// var coloredCoinsHost = 'http://api.colu.co/v2'
+var coloredCoinsHost = 'http://10.0.0.73:8080/v2'
 
 var MAX_EMPTY_ACCOUNTS = 3
 var MAX_EMPTY_ADDRESSES = 3
 var ASKING_INTERVAL = 4
 var NUM_OF_ATTEMPTS = 10
+
+var FEE = 1000
+
 module.exports = Colu
 
-function Colu (companyName, network, privateSeed) {
+function Colu (companyName, network, privateSeed, redisPort, redisHost) {
+  var self = this
   assert(companyName, 'Need company name as first argument.')
-  this.companyName = companyName
-
+  self.companyName = companyName
+  redisPort = redisPort || 6379
+  redisHost = redisHost || '127.0.0.1'
+  self.has_redis = false
+  self.redisClient = redis.createClient(redisPort, redisHost)
+  self.redisClient.on('error', function (err) {
+    console.error('Redis err: ' + err)
+    self.redisClient.end()
+    self.has_redis = false
+  })
+  self.redisClient.on('connect', function () {
+    console.log('redis connected!')
+    self.has_redis = true
+  })
+  self.fs = new FileSystem()
   if (network && network.toLowerCase() === 'testnet') {
-    this.network = bitcoin.networks.testnet
+    self.network = bitcoin.networks.testnet
   } else {
-    this.network = bitcoin.networks.bitcoin
+    self.network = bitcoin.networks.bitcoin
   }
   if (!privateSeed) {
-    this.privateSeed = crypto.randomBytes(32)
-    this.needToDiscover = false
+    self.privateSeed = crypto.randomBytes(32)
+    self.needToDiscover = false
   } else {
-    this.privateSeed = new Buffer(privateSeed, 'hex')
-    this.needToDiscover = true
+    self.privateSeed = new Buffer(privateSeed, 'hex')
+    self.needToDiscover = true
   }
-  this.master = bitcoin.HDNode.fromSeedHex(this.privateSeed, this.network)
-  this.nextAccount = 0
-  this.hdwallet = {}
-
+  self.master = bitcoin.HDNode.fromSeedHex(self.privateSeed, self.network)
+  self.nextAccount = 0
+  self.hdwallet = {}
 }
 
-Colu.init = function (companyName, network, privateSeed, callback) {
-  var instance = new Colu(companyName, network, privateSeed)
-  if (privateSeed) {
+Colu.prototype.getNextAccount = function (callback) {
+  var self = this
+  // if (this.has_redis) {
+  //   console.log('getNextAccount')
+    return self.redisClient.get('coluSdkNextAccount', function(err, nextAccount) {
+      if (err) {
+        if (self.fs) {
+          nextAccount = self.fs.get('coluSdkNextAccount') || 0
+          return callback(nextAccount)
+        } else {
+          return callback(this.nextAccount)
+        }
+
+      } else {
+        return callback(nextAccount)
+      }
+    })
+
+  // } else {
+  //   callback(this.nextAccount)
+  // }
+}
+
+Colu.prototype.setNextAccount = function (nextAccount) {
+  this.nextAccount = nextAccount
+  if (this.has_redis) {
+    this.redisClient.set('coluSdkNextAccount', this.nextAccount)
+  } else {
+    if (this.fs) {
+      this.fs.set('coluSdkNextAccount', this.nextAccount)
+    }
+  }
+}
+
+Colu.init = function (companyName, network, privateSeed, redisPort, redisHost, callback) {
+  if (typeof redisPort === 'function') {
+    callback = redisPort
+    redisPort = null
+  }
+
+  if (typeof redisHost === 'function') {
+    callback = redisHost
+    redisHost = null
+  }
+
+  var instance = new Colu(companyName, network, privateSeed, redisPort, redisHost)
+  if (instance.needToDiscover) {
     instance.discover(function (err) {
       return callback(err, instance)
     })
@@ -51,29 +115,32 @@ Colu.init = function (companyName, network, privateSeed, callback) {
 }
 
 Colu.prototype.discover = function (callback) {
-  var emptyAccounts = 0
-  var currentAccount = 0
-  async.whilst(
-    function () { return emptyAccounts < MAX_EMPTY_ACCOUNTS },
-    function (cb) {
-      console.log('discovering account: ' + currentAccount)
-      this.discoverAccount(currentAccount++, function (err, res) {
-        if (err) return cb(err)
-        if (res) {
-          emptyAccounts = 0
-          this.nextAccount = currentAccount
-        } else {
-          emptyAccounts++
-        }
-        cb()
-      }.bind(this))
-    }.bind(this),
-    function (err) {
-      if (err) return callback(err)
-      this.needToDiscover = false
-      callback()
-    }.bind(this)
-  )
+  this.getNextAccount(function (nextAccount) {
+    this.nextAccount = nextAccount || 0
+    var emptyAccounts = 0
+    var currentAccount = nextAccount || 0
+    async.whilst(
+      function () { return emptyAccounts < MAX_EMPTY_ACCOUNTS },
+      function (cb) {
+        console.log('discovering account: ' + currentAccount)
+        this.discoverAccount(currentAccount++, function (err, res) {
+          if (err) return cb(err)
+          if (res) {
+            emptyAccounts = 0
+            this.setNextAccount(currentAccount)
+          } else {
+            emptyAccounts++
+          }
+          cb()
+        }.bind(this))
+      }.bind(this),
+      function (err) {
+        if (err) return callback(err)
+        this.needToDiscover = false
+        callback()
+      }.bind(this)
+    )
+  }.bind(this))
 }
 
 Colu.prototype.discoverAccount = function (accountIndex, callback) {
@@ -158,6 +225,7 @@ Colu.prototype.getPrivateKey = function (account, addressIndex) {
   if (typeof account === 'undefined') {
     account = account || this.nextAccount++
   }
+  this.setNextAccount(this.nextAccount)
   addressIndex = addressIndex || 0
   var hdnode = deriveAddress(this.master, account, addressIndex)
   var privateKey = hdnode.privKey
@@ -206,6 +274,8 @@ Colu.prototype.getRegistrationQR = function (registrationMessage, callback) {
 }
 
 Colu.prototype.registerUser = function (registrationMessage, code, callback) {
+  var self = this
+
   assertRegistrationMessage(registrationMessage)
   if (typeof code === 'function') {
     callback = code
@@ -213,6 +283,7 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
   }
   assert.equal(typeof callback, 'function', 'Need callback function as last argument.')
   var user
+  var assetInfo
   async.waterfall([
     function (cb) {
       var url = coluHost + '/start_user_registration_to_company'
@@ -234,31 +305,36 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
         return cb(body)
       }
       body = JSON.parse(body)
-      user = this.parseRegistrationBody(body)
+      user = self.parseRegistrationBody(body)
       if (user) {
         var client_public_key = user.getRootPublicKey()
-        if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
+        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
-//          var accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
-//          return this.issueAndSend(username, accountIndex, user, cb)
-          return cb(null) // TODO: remove
+         var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
+         return self.ccIssueFinnenced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
       } else {
         cb('Wrong answer from server.')
       }
-    }.bind(this)
+    },
+    function (l_assetInfo, cb) {
+      assetInfo = l_assetInfo
+      assetInfo.userId = user.getId()
+      var url = coluHost + '/finish_registration_to_company'
+      request.post(
+        url,
+        {form: {asset_data: assetInfo}},
+        cb
+      )
+    }
   ],
-  function (err, assetId) {
+  function (err, res) {
     if (err) {
       return callback(err)
     }
-    var data = {
-      userId: user.getId()
-//      assetId: assetId,
-    }
-    return callback(null, data)
+    return callback(null, assetInfo)
   })
 }
 
@@ -266,8 +342,10 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
   assertRegistrationMessage(registrationMessage)
   assert(phonenumber && typeof phonenumber === 'string', 'No phonenumber.')
   assert.equal(typeof callback, 'function', 'Need callback function as last (third) argument.')
+  var self = this
 
   var user
+  var assetInfo
 
   async.waterfall([
     function (cb) {
@@ -282,73 +360,80 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
       }
       body = JSON.parse(body)
 
-      user = this.parseRegistrationBody(body)
+      user = self.parseRegistrationBody(body)
       if (user) {
         var client_public_key = user.getRootPublicKey()
-        if (this.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
+        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
 //          var username = getUsername(registrationMessage)
-//          var accountIndex = this.hdwallet[registrationMessage.company_public_key].accountIndex
-//          return this.issueAndSend(username, accountIndex, user, cb)
-          return cb(null) // TODO: remove
+        var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
+        return self.ccIssueFinnenced(accountIndex, user, cb)
         } else {
           cb('Signature not verified.')
         }
       } else {
         cb('Wrong answer from server.')
       }
-    }.bind(this)
+    },
+    function (l_assetInfo, cb) {
+      assetInfo = l_assetInfo
+      assetInfo.userId = user.getId()
+      var url = coluHost + '/finish_registration_to_company'
+      request.post(
+        url,
+        {form: assetInfo},
+        cb
+      )
+    }
   ],
-  function (err, assetId) {
+  function (err, res) {
     if (err) {
       return callback(err)
     }
-    var data = {
-      userId: user.getId()
-//      assetId: assetId,
-    }
-    return callback(null, data)
+    return callback(null, assetInfo)
   })
 }
 
-Colu.prototype.issueAndSend = function (username, accountIndex, user, callback) {
-  var assetId
-  var issuance
-  var address = user.getAddress()
-  console.log('sending to address: ' + address)
-  async.waterfall([
-    function (cb) {
-      this.issue(username, accountIndex, 1, cb)
-    }.bind(this),
-    function (data, cb) {
-      issuance = data
-      console.log('data: ' + JSON.stringify(data))
-      getCCAddress(address, cb)
-    },
-    function (CCAddress, cb) {
-      assetId = issuance.assetId
-      this.send(CCAddress, accountIndex, issuance, 1, cb)
-    }.bind(this),
-    // TODO: Financing the receiving address for debug purpose --- need to be removed.
-    function (data, cb) {
-      console.log('send data: ' + data)
-      var data_params = {
-        company_public_key: user.getPublicKey(),
-        purpose: 'Issue',
-        amount: 1
-      }
-      request.post(coluHost + '/dumb_finance',
-      {form: data_params },
-      cb)
-    },
-    function (response, body, cb) {
-      if (response.statusCode !== 200) {
-        return cb(body)
-      }
-      cb(null, assetId)
-    }
-  ],
-  callback)
-}
+//--------------------------------------------------------------------------------------------------
+
+// Colu.prototype.issueAndSend = function (username, accountIndex, user, callback) {
+//   var assetId
+//   var issuance
+//   var address = user.getAddress()
+//   console.log('sending to address: ' + address)
+//   async.waterfall([
+//     function (cb) {
+//       this.issue(username, accountIndex, 1, cb)
+//     }.bind(this),
+//     function (data, cb) {
+//       issuance = data
+//       console.log('data: ' + JSON.stringify(data))
+//       getCCAddress(address, cb)
+//     },
+//     function (CCAddress, cb) {
+//       assetId = issuance.assetId
+//       this.send(CCAddress, accountIndex, issuance, 1, cb)
+//     }.bind(this),
+//     // TODO: Financing the receiving address for debug purpose --- need to be removed.
+//     function (data, cb) {
+//       console.log('send data: ' + data)
+//       var data_params = {
+//         company_public_key: user.getPublicKey(),
+//         purpose: 'Issue',
+//         amount: 1
+//       }
+//       request.post(coluHost + '/dumb_finance',
+//       {form: data_params },
+//       cb)
+//     },
+//     function (response, body, cb) {
+//       if (response.statusCode !== 200) {
+//         return cb(body)
+//       }
+//       cb(null, assetId)
+//     }
+//   ],
+//   callback)
+// }
 
 Colu.prototype.parseRegistrationBody = function (body) {
   assert(body, 'Got error from server.')
@@ -406,28 +491,82 @@ Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, c
   return ecdsa_verify(hash, clientSignature, publicKey)
 }
 
-Colu.prototype.issue = function (username, account, amount, callback) {
+// Colu.prototype.issue = function (username, account, amount, callback) {
+//   assert(this.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
+//   assert(username, 'Need username as first argument.')
+//   assert(typeof account === 'number', 'Need account index as second argument.')
+//   if (typeof amount === 'function') {
+//     callback = amount
+//     amount = null
+//   }
+//   assert.equal(typeof callback, 'function', 'Need callback function as last argument.')
+//   amount = amount || 1
+//   // var attempts = 0
+//   var publicKey = this.getPublicKey(account)
+//   var assetInfo
+//   async.waterfall([
+//     // Ask for finance.
+//     function (callback) {
+//       var data_params = {
+//         company_public_key: publicKey.toHex(),
+//         purpose: 'Issue',
+//         amount: amount
+//       }
+//       request.post(coluHost + '/dumb_finance',
+//       {form: data_params },
+//       callback)
+//     },
+//     function (response, body, callback) {
+//       if (response.statusCode !== 200) {
+//         return callback(body)
+//       }
+//       body = JSON.parse(body)
+//       return waitForConfirmation([body.txid], callback)
+//     },
+//     function (callback) {
+//       return this.issueWithAttempts(publicKey, username, amount, NUM_OF_ATTEMPTS, 60 * 1000, callback)
+//     }.bind(this),
+//     function (response, body, callback) {
+//       // body = JSON.parse(body)
+//       assetInfo = body
+//       var signedTxHex = signTx(body.txHex, this.getPrivateKey(account))
+//       var data_params = {
+//         tx_hex: signedTxHex
+//       }
+//       request.post(coluHost + '/transmit',
+//       {form: data_params },
+//       callback)
+//     }.bind(this),
+//     function (response, body, callback) {
+//       if (response.statusCode !== 200) {
+//         return callback(body)
+//       }
+//       body = JSON.parse(body)
+//       assetInfo.txid = body.transaction_hash
+//       assetInfo.signTxHex = body.transaction_hex
+//       callback(null, assetInfo)
+//     }
+//     ],
+//     callback
+//   )
+// }
+
+Colu.prototype.ccIssueFinnenced = function (account, user, callback) {
   assert(this.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
-  assert(username, 'Need username as first argument.')
-  assert(typeof account === 'number', 'Need account index as second argument.')
-  if (typeof amount === 'function') {
-    callback = amount
-    amount = null
-  }
-  assert.equal(typeof callback, 'function', 'Need callback function as last argument.')
-  amount = amount || 1
-  // var attempts = 0
+  var toAddress = user.getAddress()
   var publicKey = this.getPublicKey(account)
   var assetInfo
+  var last_txid
+  console.log('account: '+account)
   async.waterfall([
     // Ask for finance.
     function (callback) {
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Issue',
-        amount: amount
+        amount: 1800 //TODO: calc min dust
       }
-      request.post(coluHost + '/dumb_finance',
+      request.post(coluHost + '/ask_for_finance',
       {form: data_params },
       callback)
     },
@@ -436,19 +575,23 @@ Colu.prototype.issue = function (username, account, amount, callback) {
         return callback(body)
       }
       body = JSON.parse(body)
-      return waitForConfirmation([body.txid], callback)
-    },
-    function (callback) {
-      return this.issueWithAttempts(publicKey, username, amount, NUM_OF_ATTEMPTS, 60 * 1000, callback)
+      last_txid = body.txid
+      return this.accessCCIssue(publicKey, toAddress, body.txid, body.vout, callback)
     }.bind(this),
     function (response, body, callback) {
-      // body = JSON.parse(body)
+      if (response.statusCode !== 200) {
+        return callback(body)
+      }
+      console.log(body)
+      body = JSON.parse(body)
       assetInfo = body
       var signedTxHex = signTx(body.txHex, this.getPrivateKey(account))
+      console.log('signTx: '+signedTxHex)
       var data_params = {
+        last_txid: last_txid,
         tx_hex: signedTxHex
       }
-      request.post(coluHost + '/transmit',
+      request.post(coluHost + '/transmit_financed',
       {form: data_params },
       callback)
     }.bind(this),
@@ -457,8 +600,7 @@ Colu.prototype.issue = function (username, account, amount, callback) {
         return callback(body)
       }
       body = JSON.parse(body)
-      assetInfo.txid = body.transaction_hash
-      assetInfo.signTxHex = body.transaction_hex
+      assetInfo.txid = body.txid2
       callback(null, assetInfo)
     }
     ],
@@ -466,83 +608,176 @@ Colu.prototype.issue = function (username, account, amount, callback) {
   )
 }
 
-Colu.prototype.atomicIssue = function (publicKey, username, amount, callback) {
-  amount = '' + amount
-  var data_params = {
-    issue_adress: publicKey.getAddress(this.network).toString(),
-    name: this.companyName + '_' + username,
-    short_name: this.companyName + '_' + username,
-    amount: amount,
-    fee: 1000,
-    selfhost: false,
-    metadata: {
-      issuer: this.companyName,
-      divisibility: 0,
-      icon_url: '',
-      image_url: '',
-      version: '1.0',
-      type: 'AccessToken',
-      description: username + ' Identety token at: ' + this.companyName
-    }
+// Colu.prototype.genericIssue = function (publicKey, assetname, assetshortname, amount, fee, selfhost, devis, image, icon, version, type, desc, usermeta, callback) {
+//   assert(typeof devis === 'number' && parseInt(devis) === devis && devis >= 0 && devis <= 8, 'Devisibility must be an integer number between 0 and 8')
+//   amount = '' + amount
+//   type = '' + type
+//   desc = '' + desc
+//   assetname = '' + assetname
+//   assetshortname = '' + assetshortname
+//   fee = fee || 1000
+//   selfhost = selfhost || false
+
+//   var data_params = {
+//     issue_adress: publicKey.getAddress(this.network).toString(),
+//     name: assetname,
+//     short_name: assetshortname,
+//     amount: amount,
+//     fee: fee,
+//     selfhost: selfhost,
+//     metadata: {
+//       issuer: this.companyName,
+//       divisibility: devis,
+//       icon_url: icon,
+//       image_url: image,
+//       version: version,
+//       type: type,
+//       description: desc,
+//       user_metadata: usermeta
+//     }
+//   }
+
+//   request.post(coloredCoinsHost + '/issue',
+//     {form: data_params},
+//     callback)
+// }
+
+Colu.prototype.ccIssue = function (args, callback) {
+  var data_params = { 
+    issueAddress: args.issueAddress || null,
+    amount: args.amount || 1,
+    fee: args.fee || FEE,
+    reissueable: args.reissueable || false,
+    flags: {
+      injectPreviousOutput: (args.injectPreviousOutput) === false ? false: true
+    },
+    divisibility: args.divisibility || 0,
+    transfer: [
+      {
+        address: args.toAddress || null,
+        amount: args.toAmount || 1
+      }
+    ],
+    financeOutput: args.financeOutput,
+    financeOutputTxid: args.financeOutputTxid
+  }
+  if (args.transfers) {
+    data_params.transfer = args.transfers
   }
 
-  request.post(coloredCoinsHost + '/issue',
+
+  return request.post(coloredCoinsHost + '/issue',
     {form: data_params},
     callback)
 }
 
-Colu.prototype.issueWithAttempts = function (publicKey, username, amount, attempts, deley, callback) {
-  this.atomicIssue(publicKey, username, amount, function (err, response, body) {
-    if (err) return callback(err)
-
-    if (response.statusCode !== 200) {
-      if (--attempts > 0) {
-        console.log('Issue failed, trying another attempt.')
-        return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
-      }
-      return callback(body)
-    }
-    body = JSON.parse(body)
-    if ('message' in body || 'error' in body) {
-      if (--attempts > 0) {
-        console.log('Issue failed, trying another attempt.')
-        return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
-      }
-      return callback(JSON.stringify(body))
-    }
-    return callback(err, response, body)
-  }.bind(this))
+Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callback) {
+  var self = this
+  args = {
+    issueAddress: publicKey.getAddress(this.network).toString(),
+    amount: 1,
+    reissueable: true,
+    injectPreviousOutput: true,
+    divisibility: 0,
+    toAddress: toAddress,
+    toAmount: 1,
+    financeOutputTxid: txid,
+    financeOutput: vout
+  }
+  return self.ccIssue(args, callback)
 }
 
-Colu.prototype.send = function (address, account, assetId, amount, callback) {
-  assert(this.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
-  assert(address, 'Need address as firdt argument.')
-  assert(typeof account === 'number', 'Need account index as second argument.')
-  assert(assetId, 'Need assetId as third argument.')
-  if (typeof amount === 'function') {
-    callback = amount
-    amount = null
+// Colu.prototype.atomicIssue = function (publicKey, username, amount, callback) {
+//   amount = '' + amount
+//   var data_params = {
+//     issue_adress: publicKey.getAddress(this.network).toString(),
+//     name: this.companyName + '_' + username,
+//     short_name: this.companyName + '_' + username,
+//     amount: amount,
+//     fee: 1000,
+//     selfhost: false,
+//     metadata: {
+//       issuer: this.companyName,
+//       divisibility: 0,
+//       icon_url: '',
+//       image_url: '',
+//       version: '1.0',
+//       type: 'AccessToken',
+//       description: username + ' Identety token at: ' + this.companyName
+//     }
+//   }
+
+//   request.post(coloredCoinsHost + '/issue',
+//     {form: data_params},
+//     callback)
+// }
+
+// Colu.prototype.issueWithAttempts = function (publicKey, username, amount, attempts, deley, callback) {
+//   this.atomicIssue(publicKey, username, amount, function (err, response, body) {
+//     if (err) return callback(err)
+
+//     if (response.statusCode !== 200) {
+//       if (--attempts > 0) {
+//         console.log('Issue failed, trying another attempt.')
+//         return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
+//       }
+//       return callback(body)
+//     }
+//     body = JSON.parse(body)
+//     if ('message' in body || 'error' in body) {
+//       if (--attempts > 0) {
+//         console.log('Issue failed, trying another attempt.')
+//         return setTimeout(this.issueWithAttempts.bind(this), deley, publicKey, username, amount, attempts, deley, callback)
+//       }
+//       return callback(JSON.stringify(body))
+//     }
+//     return callback(err, response, body)
+//   }.bind(this))
+// }
+
+
+Colu.prototype.ccSend = function (args, callback) {
+  var data_params = { 
+    fee: args.fee || FEE,
+    from: args.from || null,
+    to: [
+      {
+        address: args.toAddress || null,
+        amount: args.toAmount || 1,
+        assetId: args.toAssetId || null
+      }
+    ],
+    flags: {
+      injectPreviousOutput: (args.injectPreviousOutput) === false ? false: true
+    },
+    financeOutput: args.financeOutput,
+    financeOutputTxid: args.financeOutputTxid
   }
-  assert.equal(typeof callback, 'function', 'Need callback function as last argument.')
-  amount = amount || 1
-  var issuance
-  if (typeof assetId !== 'string' && 'assetId' in assetId) {
-    issuance = assetId
-    assetId = issuance.assetId
+  if (args.to) {
+    data_params.to = args.to
   }
 
-  var attempts = 0
-  var publicKey = this.getPublicKey(account)
+  console.log('from: '+args.from)
+  return request.post(coloredCoinsHost + '/sendasset',
+    {form: data_params},
+    callback)
+}
+
+Colu.prototype.ccSendFinnenced = function (account, toAddress, assetId, amount, callback) {
+  var self = this
+  assert(self.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
+  var publicKey = self.getPublicKey(account)
   var sendInfo
+  var lastTxid
   async.waterfall([
     // Ask for finance.
     function (callback) {
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Send',
-        amount: amount
+        amount: 1800 //TODO: calc min dust
       }
-      request.post(coluHost + '/dumb_finance',
+      request.post(coluHost + '/ask_for_finance',
       {form: data_params },
       callback)
     },
@@ -551,39 +786,42 @@ Colu.prototype.send = function (address, account, assetId, amount, callback) {
         return callback(body)
       }
       body = JSON.parse(body)
-      var txids = [body.txid]
-      if (issuance && 'transaction_hash' in issuance) {
-        txids.push(issuance.transaction_hash)
-      } else if (issuance && 'txid' in issuance) {
-        txids.push(issuance.txid)
+      lastTxid = body.txid
+
+      var sendArgs = {
+        fee: FEE,
+        from: publicKey.getAddress(self.network).toString(),
+        toAddress: toAddress,
+        toAmount: amount,
+        toAssetId: assetId,
+        financeOutput: body.vout,
+        financeOutputTxid: body.txid
       }
-      return waitForConfirmation(txids, callback)
+      return self.ccSend(sendArgs, callback)
     },
-    function (callback) {
-      this.sendWithAttempts(publicKey, address, amount, assetId, NUM_OF_ATTEMPTS, 60 * 1000, callback)
-    }.bind(this),
     function (response, body, callback) {
-      // body = JSON.parse(body)
+      if (response.statusCode !== 200) {
+        return callback(body)
+      }
+      console.log(body)
+      body = JSON.parse(body)
       sendInfo = body
-      var privateKey = this.getPrivateKey(account)
-      var signedTxHex = signTx(body.txHex, privateKey)
+      var signedTxHex = signTx(body.txHex, self.getPrivateKey(account))
+      console.log('signTx: '+signedTxHex)
       var data_params = {
+        last_txid: lastTxid,
         tx_hex: signedTxHex
       }
-      request.post(coluHost + '/transmit',
+      request.post(coluHost + '/transmit_financed',
       {form: data_params },
       callback)
-    }.bind(this),
+    },
     function (response, body, callback) {
       if (response.statusCode !== 200) {
         return callback(body)
       }
       body = JSON.parse(body)
-      if ('message' in body) {
-        return callback(JSON.stringify(body))
-      }
-      sendInfo.txid = body.transaction_hash
-      sendInfo.signTxHex = body.transaction_hex
+      sendInfo.txid = body.txid2
       callback(null, sendInfo)
     }
     ],
@@ -591,48 +829,125 @@ Colu.prototype.send = function (address, account, assetId, amount, callback) {
   )
 }
 
-Colu.prototype.atomicSend = function (publicKey, address, amount, assetId, callback) {
-  amount = '' + amount
-  var fromAddress = publicKey.getAddress(this.network).toString()
-  var data_params = {
-    'fees': 1000,
-    'from': fromAddress,
-    'to': [
-      {
-        'address': address,
-        'amount': amount,
-        'asset_id': assetId
-      }
-    ]
-  }
+// Colu.prototype.send = function (address, account, assetId, amount, callback) {
+//   assert(this.needToDiscover === false, 'Account need to go through discovery process using this.discover(callback) method')
+//   assert(address, 'Need address as firdt argument.')
+//   assert(typeof account === 'number', 'Need account index as second argument.')
+//   assert(assetId, 'Need assetId as third argument.')
+//   if (typeof amount === 'function') {
+//     callback = amount
+//     amount = null
+//   }
+//   assert.equal(typeof callback, 'function', 'Need callback function as last argument.')
+//   amount = amount || 1
+//   var issuance
+//   if (typeof assetId !== 'string' && 'assetId' in assetId) {
+//     issuance = assetId
+//     assetId = issuance.assetId
+//   }
 
-  request.post(coloredCoinsHost + '/sendasset',
-    {form: data_params},
-    callback)
-}
+//   var attempts = 0
+//   var publicKey = this.getPublicKey(account)
+//   var sendInfo
+//   async.waterfall([
+//     // Ask for finance.
+//     function (callback) {
+//       var data_params = {
+//         company_public_key: publicKey.toHex(),
+//         purpose: 'Send',
+//         amount: amount
+//       }
+//       request.post(coluHost + '/dumb_finance',
+//       {form: data_params },
+//       callback)
+//     },
+//     function (response, body, callback) {
+//       if (response.statusCode !== 200) {
+//         return callback(body)
+//       }
+//       body = JSON.parse(body)
+//       var txids = [body.txid]
+//       if (issuance && 'transaction_hash' in issuance) {
+//         txids.push(issuance.transaction_hash)
+//       } else if (issuance && 'txid' in issuance) {
+//         txids.push(issuance.txid)
+//       }
+//       return waitForConfirmation(txids, callback)
+//     },
+//     function (callback) {
+//       this.sendWithAttempts(publicKey, address, amount, assetId, NUM_OF_ATTEMPTS, 60 * 1000, callback)
+//     }.bind(this),
+//     function (response, body, callback) {
+//       // body = JSON.parse(body)
+//       sendInfo = body
+//       var privateKey = this.getPrivateKey(account)
+//       var signedTxHex = signTx(body.txHex, privateKey)
+//       var data_params = {
+//         tx_hex: signedTxHex
+//       }
+//       request.post(coluHost + '/transmit',
+//       {form: data_params },
+//       callback)
+//     }.bind(this),
+//     function (response, body, callback) {
+//       if (response.statusCode !== 200) {
+//         return callback(body)
+//       }
+//       body = JSON.parse(body)
+//       if ('message' in body) {
+//         return callback(JSON.stringify(body))
+//       }
+//       sendInfo.txid = body.transaction_hash
+//       sendInfo.signTxHex = body.transaction_hex
+//       callback(null, sendInfo)
+//     }
+//     ],
+//     callback
+//   )
+// }
 
-Colu.prototype.sendWithAttempts = function (publicKey, address, amount, assetId, attempts, deley, callback) {
-  this.atomicSend(publicKey, address, amount, assetId, function (err, response, body) {
-    if (err) return callback(err)
+// Colu.prototype.atomicSend = function (publicKey, address, amount, assetId, callback) {
+//   amount = '' + amount
+//   var fromAddress = publicKey.getAddress(this.network).toString()
+//   var data_params = {
+//     'fees': 1000,
+//     'from': fromAddress,
+//     'to': [
+//       {
+//         'address': address,
+//         'amount': amount,
+//         'asset_id': assetId
+//       }
+//     ]
+//   }
 
-    if (response.statusCode !== 200) {
-      if (--attempts > 0) {
-        console.log('Send failed, trying another attempt.')
-        return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
-      }
-      return callback(body)
-    }
-    body = JSON.parse(body)
-    if ('message' in body || 'error' in body) {
-      if (--attempts > 0) {
-        console.log('Send failed, trying another attempt.')
-        return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
-      }
-      return callback(JSON.stringify(body))
-    }
-    return callback(err, response, body)
-  }.bind(this))
-}
+//   request.post(coloredCoinsHost + '/sendasset',
+//     {form: data_params},
+//     callback)
+// }
+
+// Colu.prototype.sendWithAttempts = function (publicKey, address, amount, assetId, attempts, deley, callback) {
+//   this.atomicSend(publicKey, address, amount, assetId, function (err, response, body) {
+//     if (err) return callback(err)
+
+//     if (response.statusCode !== 200) {
+//       if (--attempts > 0) {
+//         console.log('Send failed, trying another attempt.')
+//         return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
+//       }
+//       return callback(body)
+//     }
+//     body = JSON.parse(body)
+//     if ('message' in body || 'error' in body) {
+//       if (--attempts > 0) {
+//         console.log('Send failed, trying another attempt.')
+//         return setTimeout(this.sendWithAttempts.bind(this), deley, publicKey, address, amount, assetId, attempts, deley, callback)
+//       }
+//       return callback(JSON.stringify(body))
+//     }
+//     return callback(err, response, body)
+//   }.bind(this))
+// }
 
 Colu.prototype.getUsername = function (registrationMessage) {
   assertRegistrationMessage(registrationMessage)

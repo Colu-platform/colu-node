@@ -2,7 +2,7 @@
 var Colu = require('../src/index.js')
 var User = require('../src/user.js')
 
-var privateSeed = 'c507290be50bca9b987af39019f80e1f9f17e4020ee0a4fe51595ee4424d6150'
+var privateSeed = 'c507290be50bca9b887af39019f80e2f9f27e4020ee0a4fe51595ee4424d6151'
 
 Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
   if (err) {
@@ -47,15 +47,16 @@ Colu.init('my_company', 'testnet', privateSeed, function(err, colu) {
 
     colu.registerUser(registrationMessage, code, function(err, data) {
       if (err) return console.log('Error: '+ JSON.stringify(err))
-      console.log('userId: '+data.userId)
+      console.log('data:'+JSON.stringify(data))
+      // console.log('userId: '+data.userId)
 //        console.log('assetId: '+data.assetId)
-      var username = colu.getUsername(registrationMessage)
-      var accountIndex = colu.hdwallet[registrationMessage.company_public_key].accountIndex
-      var user = new User(data.userId)
-      return colu.issueAndSend(username, accountIndex, user, function (err, assetId) {
-        if (err) return console.log('Error: '+ JSON.stringify(err))
-        console.log('assetId: '+assetId)
-      })
+      // var username = colu.getUsername(registrationMessage)
+      // var accountIndex = colu.hdwallet[registrationMessage.company_public_key].accountIndex
+      // var user = new User(data.userId)
+      // return colu.issueAndSend(username, accountIndex, user, function (err, assetId) {
+      //   if (err) return console.log('Error: '+ JSON.stringify(err))
+      //   console.log('assetId: '+assetId)
+      // })
     })
   })
 })
