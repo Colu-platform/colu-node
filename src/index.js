@@ -59,6 +59,8 @@ function Colu (companyName, network, privateSeed, redisPort, redisHost) {
   self.hdwallet = {}
 }
 
+Colu.User = User
+
 Colu.prototype.getNextAccount = function (callback) {
   var self = this
   // if (this.has_redis) {
