@@ -257,7 +257,7 @@ Colu.prototype.getPublicKey = function (account, addressIndex) {
 }
 
 Colu.prototype.createRegistrationQR = function (registrationMessage) {
-  var self = this
+  // var self = this
   assertRegistrationMessage(registrationMessage)
   var dataURI = qr(JSON.stringify(registrationMessage), {type: 15, size: 10, level: 'L'})
   return dataURI
@@ -411,8 +411,15 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
   })
 }
 
-Colu.prototype.parseRegistrationBody = function (body) {
+Colu.prototype.issueGenericAsset = function (userExtendedKey, assetData, callback) {
   var self = this
+  var user = new User(userExtendedKey)
+  var accountIndex = self.hdwallet[self.getPublicKey(self.nextAccount - 1)].accountIndex
+  return self.ccIssueFinanced(accountIndex, user, assetData, callback)
+}
+
+Colu.prototype.parseRegistrationBody = function (body) {
+  // var self = this
   assert(body, 'Got error from server.')
   assert('extended_public_key' in body, 'No extended_public_key return from server.')
   assert('verified_client_signature' in body, 'No verified_client_signature return from server.')
@@ -470,7 +477,11 @@ Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, c
   return ecdsa_verify(hash, clientSignature, publicKey)
 }
 
-Colu.prototype.ccIssueFinanced = function (account, user, callback) {
+Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
+  if (typeof assetData === 'function') {
+    callback = assetData
+    assetData = null
+  }
   var self = this
   assert(self.needToDiscover === false, 'Account need to go through discovery process using colu.discover(callback) method')
   var toAddress = user.getAddress()
@@ -497,7 +508,8 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
       console.log('got money')
       body = JSON.parse(body)
       last_txid = body.txid
-      return self.accessCCIssue(publicKey, toAddress, body.txid, body.vout, cb)
+      if (!assetData) return self.accessCCIssue(publicKey, toAddress, body.txid, body.vout, cb)
+      return self.genericCCIssue(publicKey, toAddress, body.txid, body.vout, assetData, cb)
     },
     function (response, body, cb) {
       if (response.statusCode !== 200) {
@@ -550,7 +562,8 @@ Colu.prototype.ccIssue = function (args, callback) {
       }
     ],
     financeOutput: args.financeOutput,
-    financeOutputTxid: args.financeOutputTxid
+    financeOutputTxid: args.financeOutputTxid,
+    metadata: args.metadata
   }
   if (args.transfers) {
     data_params.transfer = args.transfers
@@ -573,6 +586,24 @@ Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callb
     toAmount: 1,
     financeOutputTxid: txid,
     financeOutput: vout
+  }
+  return self.ccIssue(args, callback)
+}
+
+Colu.prototype.genericCCIssue = function (publicKey, toAddress, txid, vout, assetData, callback) {
+  var self = this
+  console.log(publicKey.getAddress(this.network).toString())
+  var args = {
+    issueAddress: publicKey.getAddress(this.network).toString(),
+    amount: assetData.amount,
+    reissueable: assetData.reissueable,
+    injectPreviousOutput: assetData.injectPreviousOutput,
+    divisibility: assetData.divisibility,
+    toAddress: toAddress,
+    toAmount: assetData.amount,
+    financeOutputTxid: txid,
+    financeOutput: vout,
+    metadata: assetData.metadata
   }
   return self.ccIssue(args, callback)
 }
@@ -670,7 +701,7 @@ Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, c
 }
 
 Colu.prototype.getUsername = function (registrationMessage) {
-  var self = this
+  // var self = this
   assertRegistrationMessage(registrationMessage)
   var message = registrationMessage.message
   message = JSON.parse(message)
