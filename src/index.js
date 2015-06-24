@@ -414,7 +414,7 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
 Colu.prototype.issueGenericAsset = function (userExtendedKey, assetData, callback) {
   var self = this
   var user = new User(userExtendedKey)
-  var accountIndex = self.hdwallet[self.getPublicKey(self.nextAccount - 1)].accountIndex
+  var accountIndex = self.hdwallet[self.getPublicKey(self.nextAccount - 1).toHex()].accountIndex
   return self.ccIssueFinanced(accountIndex, user, assetData, callback)
 }
 
