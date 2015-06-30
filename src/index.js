@@ -9,7 +9,7 @@ var redis = require('redis')
 var User = require('./user.js')
 var FileSystem = require('./filesystem.js')
 
-var coluHost = 'https://dev.colu.co'
+var coluHost = 'https://dev.engine.colu.co'
 var coloredCoinsHost = 'http://api.coloredcoins.org/v2'
 
 var MAX_EMPTY_ACCOUNTS = 3
@@ -318,8 +318,6 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
     },
     function (response, body, cb) {
       if (response.statusCode !== 200) {
-        console.error('!!!! body: ' + body)
-        console.error('!!!! response.statusCode: ' + response.statusCode)
         return cb(new Error(body))
       }
       body = JSON.parse(body)
@@ -501,7 +499,6 @@ Colu.prototype.ccIssueFinanced = function (account, user, callback) {
     },
     function (response, body, cb) {
       if (response.statusCode !== 200) {
-        console.log('?????' + body)
         return cb(body)
       }
       console.log('got issue tx')
@@ -706,6 +703,7 @@ Colu.prototype.isAddressesActive = function (addresses, callback) {
       if (response.statusCode !== 200) {
         return callback(body)
       }
+      if (!body) return callback('No response from colu server.')
       body = JSON.parse(body)
       return callback(null, body)
     }
