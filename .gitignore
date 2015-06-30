@@ -24,3 +24,4 @@ build/Release
 
 node_modules
 .DS_store
+examples/qr.jpg
