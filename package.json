@@ -1,6 +1,6 @@
 {
   "name": "colu",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Colu SDK for node.js developers",
   "main": "./src/index.js",
   "dependencies": {

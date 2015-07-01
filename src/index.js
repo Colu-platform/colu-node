@@ -325,9 +325,9 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
       if (user) {
         var client_public_key = user.getRootPublicKey()
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
-//          var username = getUsername(registrationMessage)
+          var username = self.getUsername(registrationMessage)
           var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-          return self.ccIssueFinanced(accountIndex, user, cb)
+          return self.ccIssueFinanced(accountIndex, user, username, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -380,9 +380,9 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
       if (user) {
         var client_public_key = user.getRootPublicKey()
         if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
-//          var username = getUsername(registrationMessage)
+          var username = self.getUsername(registrationMessage)
           var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
-          return self.ccIssueFinanced(accountIndex, user, cb)
+          return self.ccIssueFinanced(accountIndex, user, username, cb)
         } else {
           cb('Signature not verified.')
         }
@@ -476,8 +476,13 @@ Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, c
 }
 
 Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
-  if (typeof assetData === 'function') {
+  var username
+  if (typeof assetData == 'function') {
     callback = assetData
+    assetData = null
+  }
+  if (typeof assetData == 'string') {
+    username = assetData
     assetData = null
   }
   var self = this
@@ -506,7 +511,7 @@ Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
       console.log('got money')
       body = JSON.parse(body)
       last_txid = body.txid
-      if (!assetData) return self.accessCCIssue(publicKey, toAddress, body.txid, body.vout, cb)
+      if (!assetData) return self.accessCCIssue(publicKey, toAddress, body.txid, body.vout, username, cb)
       return self.genericCCIssue(publicKey, toAddress, body.txid, body.vout, assetData, cb)
     },
     function (response, body, cb) {
@@ -570,7 +575,7 @@ Colu.prototype.ccIssue = function (args, callback) {
     callback)
 }
 
-Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callback) {
+Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, username, callback) {
   var self = this
   console.log(publicKey.getAddress(this.network).toString())
   var args = {
@@ -582,8 +587,30 @@ Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, callb
     toAddress: toAddress,
     toAmount: 1,
     financeOutputTxid: txid,
-    financeOutput: vout
+    financeOutput: vout,
+    metadata: {
+      assetName: self.companyName+' access token',
+      issuer: self.companyName,
+      description: 'Access token for user '+username+' to '+self.companyName+'.',
+      userData: {
+        meta: [
+          {
+            key: 'username',
+            value: username,
+            type: 'String'
+
+          },
+          {
+            key: 'type',
+            value: 'AccessToken',
+            type: 'String'
+
+          }
+        ]
+      }
+    }
   }
+  console.log('args', JSON.stringify(args))
   return self.ccIssue(args, callback)
 }
 
