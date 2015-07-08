@@ -324,7 +324,7 @@ Colu.prototype.registerUser = function (registrationMessage, code, callback) {
       user = self.parseRegistrationBody(body)
       if (user) {
         var client_public_key = user.getRootPublicKey()
-        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
+        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified, body.client_message_str)) {
           var username = self.getUsername(registrationMessage)
           var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
           return self.ccIssueFinanced(accountIndex, user, username, cb)
@@ -379,7 +379,7 @@ Colu.prototype.registerUserByPhonenumber = function (registrationMessage, phonen
       user = self.parseRegistrationBody(body)
       if (user) {
         var client_public_key = user.getRootPublicKey()
-        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified)) {
+        if (self.verifyMessage(registrationMessage, body.verified_client_signature, client_public_key, body.verified, body.client_message_str)) {
           var username = self.getUsername(registrationMessage)
           var accountIndex = self.hdwallet[registrationMessage.company_public_key].accountIndex
           return self.ccIssueFinanced(accountIndex, user, username, cb)
@@ -447,7 +447,7 @@ Colu.prototype.verifyUser = function (username, assetId, callback) {
       body = JSON.parse(body)
       assert('client_public_key' in body, 'No client_public_key return from server.')
       assert('verified_client_signature' in body, 'No verified_client_signature return from server.')
-      if (self.verifyMessage(data_params, body.verified_client_signature, body.client_public_key, body.verified)) {
+      if (self.verifyMessage(data_params, body.verified_client_signature, body.client_public_key, body.verified, body.client_message_str)) {
         return callback(null, body)
       } else {
         callback('signature not verified')
@@ -456,7 +456,7 @@ Colu.prototype.verifyUser = function (username, assetId, callback) {
   )
 }
 
-Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, clientPublicKey, verified) {
+Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, clientPublicKey, verified, clientMessageStr) {
   var self = this
   var message = registrationMessage.message
   var signature = registrationMessage.signature
@@ -466,7 +466,19 @@ Colu.prototype.verifyMessage = function (registrationMessage, clientSignature, c
     signature: signature,
     verified: verified
   }
-  var clientMessageStr = JSON.stringify(clientMessage)
+
+  if (clientMessageStr) {
+    logger.debug('clientMessageStr', clientMessageStr)
+    logger.debug('clientMessage', JSON.stringify(clientMessage))
+    clientMessage = JSON.parse(clientMessageStr)
+
+    if (!(clientMessage.message === message) || !(clientMessage.signature === signature) || !(clientMessage.verified === verified)) {
+      return next(['Invalid client message', 401])
+    }
+  } else {
+    clientMessageStr = JSON.stringify(clientMessage)
+  }
+
   var hash = crypto.createHash('sha256').update(clientMessageStr).digest()
   var publicKey = bitcoin.ECPubKey.fromHex(clientPublicKey)
   if (clientAddress) {
@@ -494,11 +506,11 @@ Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
   async.waterfall([
     // Ask for finance.
     function (cb) {
-      console.log('asking for money')
+      // console.log('asking for money')
       var data_params = {
         company_public_key: publicKey.toHex(),
         purpose: 'Issue',
-        amount: 1800 // TODO: calc min dust
+        amount: 2 * FEE
       }
       request.post(self.coluHost + '/ask_for_finance',
       {form: data_params },
@@ -508,7 +520,7 @@ Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
       if (response.statusCode !== 200) {
         return cb(body)
       }
-      console.log('got money')
+      // console.log('got money')
       body = JSON.parse(body)
       last_txid = body.txid
       if (!assetData) return self.accessCCIssue(publicKey, toAddress, body.txid, body.vout, username, cb)
@@ -518,12 +530,12 @@ Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
       if (response.statusCode !== 200) {
         return cb(body)
       }
-      console.log('got issue tx')
+      // console.log('got issue tx')
       console.log(body)
       body = JSON.parse(body)
       assetInfo = body
       var signedTxHex = signTx(body.txHex, self.getPrivateKey(account))
-      console.log('signTx: ' + signedTxHex)
+      // console.log('signTx: ' + signedTxHex)
       var data_params = {
         last_txid: last_txid,
         tx_hex: signedTxHex
@@ -536,7 +548,7 @@ Colu.prototype.ccIssueFinanced = function (account, user, assetData, callback) {
       if (response.statusCode !== 200) {
         return cb(body)
       }
-      console.log('transmited')
+      // console.log('transmited')
       body = JSON.parse(body)
       assetInfo.txid = body.txid2
       cb(null, assetInfo)
@@ -610,7 +622,6 @@ Colu.prototype.accessCCIssue = function (publicKey, toAddress, txid, vout, usern
       }
     }
   }
-  console.log('args', JSON.stringify(args))
   return self.ccIssue(args, callback)
 }
 
@@ -702,7 +713,7 @@ Colu.prototype.ccSendFinanced = function (account, toAddress, assetId, amount, c
       body = JSON.parse(body)
       sendInfo = body
       var signedTxHex = signTx(body.txHex, self.getPrivateKey(account))
-      console.log('signTx: ' + signedTxHex)
+      // console.log('signTx: ' + signedTxHex)
       var data_params = {
         last_txid: lastTxid,
         tx_hex: signedTxHex
