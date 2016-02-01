@@ -39,7 +39,7 @@
     "name": "thehobbit85",
     "email": "eliran@colu.co"
   }],
-  "license": "MIT",
+  "license": "https://www.colu.co/TOS",
   "bugs": {
     "url": "https://github.com/Colu-platform/colu-node/issues"
   },
